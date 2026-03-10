@@ -1,0 +1,1819 @@
+[
+  {
+    "input": "add new customer John Smith phone 07123456789",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "John Smith",
+      "phone": "07123456789"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new customer Sarah Jones 07922334455",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Sarah Jones",
+      "phone": "07922334455"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "save customer Liam Brown phone 07800111222",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Liam Brown",
+      "phone": "07800111222"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Chloe Evans mobile 07444555666",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Chloe Evans",
+      "phone": "07444555666"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new customer Dave from Nottingham 07777888999",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Dave",
+      "location_hint": "Nottingham",
+      "phone": "07777888999"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "customer is Paul Green number 07555123456",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Paul Green",
+      "phone": "07555123456"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "stick this down as new customer Hannah White 07333111222",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Hannah White",
+      "phone": "07333111222"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new client Jack Turner 07000123456",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Jack Turner",
+      "phone": "07000123456"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "save customer Mrs Patel 07999988877",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Mrs Patel",
+      "phone": "07999988877"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new customer rob 07700900123",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Rob",
+      "phone": "07700900123"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "customer name is Amelia Wood and her phone is 07111000222",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Amelia Wood",
+      "phone": "07111000222"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add this lady as customer Janet 07876543210",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Janet",
+      "phone": "07876543210"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "can you save a new customer called Ryan Cooper number 07400123000",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Ryan Cooper",
+      "phone": "07400123000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new cusomer Matt Brooks 07911001100",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Matt Brooks",
+      "phone": "07911001100"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show John Smith account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "John Smith"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "find customer Sarah Jones",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "bring up Mark Wilson",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Mark Wilson"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "pull up Mrs Patel",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "search for Liam Brown",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Liam Brown"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me the account for Paul Green",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Paul Green"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show customer called Ben Taylor",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Ben Taylor"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "get me Hannah White",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Hannah White"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "look up Ryan Cooper",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Ryan Cooper"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "update John Smith phone 07000000001",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "phone": "07000000001"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "update customer Chloe Evans mobile to 07444000000",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Chloe Evans",
+      "phone": "07444000000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "change Mrs Patel phone to 07900011223",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "phone": "07900011223"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "swap Jack Turner number to 07912312312",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Jack Turner",
+      "phone": "07912312312"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for John Smith boiler repair",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "job_title": "boiler repair"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add job Sarah Jones leak under sink",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones",
+      "job_title": "leak under sink"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "job for Chloe Evans rewiring kitchen",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Chloe Evans",
+      "job_title": "rewiring kitchen"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create a job for Mrs Patel boiler service tomorrow",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "job_title": "boiler service",
+      "date_text": "tomorrow"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "set up a job for Liam Brown gutter cleaning on friday",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Liam Brown",
+      "job_title": "gutter cleaning",
+      "date_text": "friday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add job kitchen cabinet fitting for Ryan Cooper",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Ryan Cooper",
+      "job_title": "kitchen cabinet fitting"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put down a job for Steve Carter loft light",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Steve Carter",
+      "job_title": "loft light"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add in a callout for John Smith blocked drain",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "job_title": "blocked drain"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show my jobs",
+    "expected_intent": "list_jobs",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show open jobs",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "status": "open"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what jobs have i got today",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "list jobs for tomorrow",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "date_text": "tomorrow"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show completed jobs",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "status": "completed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what's left open",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "status": "open"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "jobs for John Smith",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "customer_name_query": "John Smith"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what jobs are booked this week",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me today's work",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "any jobs for Friday",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "date_text": "friday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what have i got on for Mrs Patel",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "list all in progress jobs",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "status": "in_progress"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show this week's callouts",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "mark boiler repair for John Smith as completed",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "job_title_query": "boiler repair",
+      "status": "completed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "set Sarah Jones leak under sink to done",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones",
+      "job_title_query": "leak under sink",
+      "status": "completed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "pause Liam Brown gutter cleaning",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "Liam Brown",
+      "job_title_query": "gutter cleaning",
+      "status": "pending"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "job done for Mrs Patel boiler service",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "job_title_query": "boiler service",
+      "status": "completed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add payment 200 from John Smith",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "amount": 200,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put down 80 from Mrs Patel",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "amount": 80,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add payment for Liam Brown 450",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Liam Brown",
+      "amount": 450,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "record 95 from Chloe Evans",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Chloe Evans",
+      "amount": 95,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "customer John Smith paid me 600 yesterday",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "John Smith",
+      "amount": 600,
+      "date_text": "yesterday",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "bank transfer from Ryan Cooper 700",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ryan Cooper",
+      "amount": 700,
+      "payment_method": "bank transfer",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "cash from Steve Carter 120",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Steve Carter",
+      "amount": 120,
+      "payment_method": "cash",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add partial payment 50 from Mrs Patel",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "amount": 50,
+      "payment_type": "partial",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "can you log 275 from Paul Green",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Paul Green",
+      "amount": 275,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show today's payments",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show yesterday's payments",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "yesterday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "payments this week",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what got paid today",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me who paid",
+    "expected_intent": "list_payments",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "list payments for John Smith",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "customer_name_query": "John Smith"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show bank transfer payments",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "payment_method": "bank transfer"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "how much came in this month",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "period": "this_month"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "list cash payments today",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "payment_method": "cash",
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show recent payments",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "sort": "recent"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "paid in yesterday",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "yesterday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what came in on friday",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "friday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show customers with outstanding balance",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "who owes me money",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show debts",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "which customers havent paid",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "outstanding balances please",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "who still needs to pay",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show John Smith debt",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "customer_name_query": "John Smith"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what does Sarah Jones still owe",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show small debts only",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "filter": "small_debts"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "biggest debts first",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "sort": "debt_desc"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show overdue payments",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "filter": "overdue"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "who hasn't settled up this week",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me anyone still owing from last month",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "period": "last_month"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "how much did i make this week",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_week",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "weekly earnings",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_week",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show this months income",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_month",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what did i earn today",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "how much did i spend this week",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_week",
+      "metric": "expenses"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "profit this month",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_month",
+      "metric": "profit"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "income and expenses for this month",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_month",
+      "metric": "income_vs_expenses"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "how am i doing this week",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_week",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what's the takings today",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "month to date earnings",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "month_to_date",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "last week's total income",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "last_week",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show my numbers for this month",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_month",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what did i make yesterday",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "yesterday",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "summary today",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "daily summary",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "end of day summary",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "summary yesterday",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "yesterday",
+      "metric": "summary"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "how much profit have i got this week",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "this_week",
+      "metric": "profit"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "make invoice for Sarah Jones leak under sink",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones",
+      "job_title_query": "leak under sink"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "make me an invoice for Mrs Patel boiler service",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "job_title_query": "boiler service"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "raise invoice for Ryan Cooper blocked drain",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Ryan Cooper",
+      "job_title_query": "blocked drain"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "draft invoice for Chloe Evans rewiring kitchen",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Chloe Evans",
+      "job_title_query": "rewiring kitchen"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add expense 35 fuel",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 35,
+      "category": "fuel",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new expense 120 materials for John Smith job",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 120,
+      "category": "materials",
+      "job_customer_name_query": "John Smith",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add expense for parking 8",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 8,
+      "category": "parking",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put through 55 for tools",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 55,
+      "category": "tools",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "record 18 on fuel",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 18,
+      "category": "fuel",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "materials cost me 90 today",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 90,
+      "category": "materials",
+      "date_text": "today",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "fuel 40",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 40,
+      "category": "fuel",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new expenses 65 screws and bits",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 65,
+      "category": "supplies",
+      "note": "screws and bits",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "cost me 30 on diesel",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 30,
+      "category": "diesel",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "expenses today",
+    "expected_intent": "list_expenses",
+    "expected_entities": {
+      "date_text": "today"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show this week's expenses",
+    "expected_intent": "list_expenses",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "ad custmer pete 07123450000",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Pete",
+      "phone": "07123450000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "hw much did i make tday",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "today",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "shw debts",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add expnse 45 fuel",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 45,
+      "category": "fuel",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "payments yday",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "date_text": "yesterday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "who's still not paid me",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what have i got on tomorrow",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "date_text": "tomorrow"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "take 50 cash off mrs patel account",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mrs Patel",
+      "amount": 50,
+      "payment_method": "cash",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me what's outstanding",
+    "expected_intent": "list_debts",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show all jobs for this week",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what came in this week",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "period": "this_week"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show takings for last week",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "period": "last_week",
+      "metric": "income"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new callout for Ben Taylor no hot water",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Ben Taylor",
+      "job_title": "no hot water"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "customer paid in full 950 Ryan Cooper",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ryan Cooper",
+      "amount": 950,
+      "payment_type": "full",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Oliver Reed phone 07700000000",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Oliver Reed",
+      "phone": "07700000000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Oliver Reed radiator fix",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Oliver Reed",
+      "job_title": "radiator fix"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Oliver Reed account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Oliver Reed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Oliver Reed for radiator fix",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Oliver Reed",
+      "job_title_query": "radiator fix"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Harry Clarke phone 07700000001",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Harry Clarke",
+      "phone": "07700000001"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Harry Clarke bath reseal",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Harry Clarke",
+      "job_title": "bath reseal"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Harry Clarke account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Harry Clarke"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Harry Clarke for bath reseal",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Harry Clarke",
+      "job_title_query": "bath reseal"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Ella Morris phone 07700000002",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Ella Morris",
+      "phone": "07700000002"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Ella Morris socket replacement",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Ella Morris",
+      "job_title": "socket replacement"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Ella Morris account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Ella Morris"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Ella Morris for socket replacement",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Ella Morris",
+      "job_title_query": "socket replacement"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer George Baker phone 07700000003",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "George Baker",
+      "phone": "07700000003"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for George Baker garden fence repair",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "George Baker",
+      "job_title": "garden fence repair"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show George Baker account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "George Baker"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice George Baker for garden fence repair",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "George Baker",
+      "job_title_query": "garden fence repair"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Ruby Adams phone 07700000004",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Ruby Adams",
+      "phone": "07700000004"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Ruby Adams roof patch",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Ruby Adams",
+      "job_title": "roof patch"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Ruby Adams account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Ruby Adams"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Ruby Adams for roof patch",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Ruby Adams",
+      "job_title_query": "roof patch"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Noah Phillips phone 07700000005",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Noah Phillips",
+      "phone": "07700000005"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Noah Phillips tap replacement",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Noah Phillips",
+      "job_title": "tap replacement"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Noah Phillips account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Noah Phillips"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Noah Phillips for tap replacement",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Noah Phillips",
+      "job_title_query": "tap replacement"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Mia Campbell phone 07700000006",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Mia Campbell",
+      "phone": "07700000006"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Mia Campbell door hanging",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Mia Campbell",
+      "job_title": "door hanging"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Mia Campbell account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Mia Campbell"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Mia Campbell for door hanging",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Mia Campbell",
+      "job_title_query": "door hanging"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Leo Parker phone 07700000007",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Leo Parker",
+      "phone": "07700000007"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Leo Parker light fitting",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Leo Parker",
+      "job_title": "light fitting"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Leo Parker account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Leo Parker"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Leo Parker for light fitting",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Leo Parker",
+      "job_title_query": "light fitting"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Grace Edwards phone 07700000008",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Grace Edwards",
+      "phone": "07700000008"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Grace Edwards drain unblock",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Grace Edwards",
+      "job_title": "drain unblock"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Grace Edwards account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Grace Edwards"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Grace Edwards for drain unblock",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Grace Edwards",
+      "job_title_query": "drain unblock"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Archie Collins phone 07700000009",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Archie Collins",
+      "phone": "07700000009"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for Archie Collins wall repaint",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Archie Collins",
+      "job_title": "wall repaint"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show Archie Collins account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Archie Collins"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Archie Collins for wall repaint",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Archie Collins",
+      "job_title_query": "wall repaint"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "debt 300 Screwfix",
+    "expected_intent": "record_vendor_debt",
+    "expected_entities": {
+      "vendor_query": "Screwfix",
+      "amount": 300,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "paid 120 to Screwfix",
+    "expected_intent": "record_vendor_payment",
+    "expected_entities": {
+      "vendor_query": "Screwfix",
+      "amount": 120,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "vendor summary",
+    "expected_intent": "vendor_summary",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "export vendor payments as pdf",
+    "expected_intent": "export_vendor_report",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "bring expenses records as pdf",
+    "expected_intent": "export_expenses_pdf",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "export my data",
+    "expected_intent": "export_all_records",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "start briefing",
+    "expected_intent": "toggle_briefing",
+    "expected_entities": {
+      "enabled": true
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "stop briefing",
+    "expected_intent": "toggle_briefing",
+    "expected_entities": {
+      "enabled": false
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "subscribe",
+    "expected_intent": "subscribe",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "hello",
+    "expected_intent": "greeting",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "help",
+    "expected_intent": "help",
+    "expected_entities": {
+      "requested_help": true
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "confirm",
+    "expected_intent": "confirm_action",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "cancel",
+    "expected_intent": "cancel_action",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "I paid 300 for paint and 100 for parking and 50 for bins",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "items": [
+        {
+          "amount": 300,
+          "currency": "GBP",
+          "note": "paint"
+        },
+        {
+          "amount": 100,
+          "currency": "GBP",
+          "note": "parking"
+        },
+        {
+          "amount": 50,
+          "currency": "GBP",
+          "note": "bins"
+        }
+      ]
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show supplier summary",
+    "expected_intent": "vendor_summary",
+    "expected_entities": {},
+    "should_clarify": false,
+    "should_disambiguate": false
+  }
+]

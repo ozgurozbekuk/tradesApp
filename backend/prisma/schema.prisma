@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  past_due
+  canceled
+}
+
+enum JobStatus {
+  active
+  completed
+  canceled
+}
+
+enum PaymentMethod {
+  cash
+  bank
+  card
+  unknown
+}
+
+enum ReminderType {
+  due_1d
+  overdue_3d
+  morning_briefing
+  custom
+}
+
+enum MoneyDirection {
+  inflow
+  outflow
+}
+
+enum MoneyTransactionKind {
+  expense_paid
+  vendor_debt_added
+  vendor_payment_made
+}
+
+model User {
+  id                   String             @id @default(uuid())
+  clerkUserId          String?            @unique
+  email                String?            @unique
+  phone                String             @unique
+  passwordHash         String?
+  phoneVerifiedAt      DateTime?
+  whatsappActivatedAt  DateTime?
+  businessName         String
+  businessAddress      String?
+  businessPhone        String?
+  businessIban         String?
+  tradeType            String?
+  timezone             String             @default("Europe/London")
+  briefingEnabled      Boolean            @default(true)
+  trialEndsAt          DateTime
+  subscriptionStatus   SubscriptionStatus @default(trial)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  customers  Customer[]
+  jobs       Job[]
+  payments   Payment[]
+  vendorLedgers VendorLedger[]
+  moneyTransactions MoneyTransaction[]
+  reminders  Reminder[]
+  auditLogs  AuditLog[]
+  phoneVerificationChallenges PhoneVerificationChallenge[]
+}
+
+model PhoneVerificationChallenge {
+  id          String   @id @default(uuid())
+  userId       String
+  clerkUserId  String   @unique
+  phone        String
+  codeHash     String
+  expiresAt    DateTime
+  verifiedAt   DateTime?
+  attempts     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([phone])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  phone     String?
+  notes     String?
+  balancePence Int   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs Job[]
+
+  @@index([userId])
+  @@unique([userId, phone])
+}
+
+model Job {
+  id              String    @id @default(uuid())
+  userId          String
+  customerId      String?
+  title           String
+  description     String?
+  scheduledDate   DateTime?
+  dueDate         DateTime?
+  priceTotalPence Int
+  depositPence    Int?
+  status          JobStatus @default(active)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  payments  Payment[]
+  reminders Reminder[]
+
+  @@index([userId, status])
+  @@index([dueDate])
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  userId      String
+  jobId       String
+  amountPence Int
+  method      PaymentMethod @default(unknown)
+  paidAt      DateTime
+  note        String?
+  createdAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([jobId])
+}
+
+model Reminder {
+  id         String       @id @default(uuid())
+  userId     String
+  jobId      String?
+  type       ReminderType
+  remindAt   DateTime
+  sentAt     DateTime?
+  sendCount  Int          @default(0)
+  maxSends   Int          @default(1)
+  lastSentAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job? @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, remindAt])
+  @@index([jobId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String
+  action       String
+  metadataJson Json
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model VendorLedger {
+  id                   String   @id @default(uuid())
+  userId               String
+  vendorName           String
+  vendorNameNormalized String
+  balancePence         Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions MoneyTransaction[]
+
+  @@index([userId])
+  @@unique([userId, vendorNameNormalized])
+}
+
+model MoneyTransaction {
+  id              String               @id @default(uuid())
+  userId          String
+  kind            MoneyTransactionKind
+  direction       MoneyDirection
+  amountPence     Int
+  vendorId        String?
+  counterpartyName String?
+  note            String?
+  occurredAt      DateTime
+  createdAt       DateTime             @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor VendorLedger? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt])
+  @@index([vendorId])
+}

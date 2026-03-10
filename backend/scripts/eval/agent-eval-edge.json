@@ -1,0 +1,1148 @@
+[
+  {
+    "input": "add customer Mark Wilson",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Mark Wilson"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "can you add customer Ahmed Khan",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Ahmed Khan"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put in a new customer called Steve Carter",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Steve Carter"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add a customer for me called Ben Taylor",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Ben Taylor"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "make customer record for Olivia Hall",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Olivia Hall"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add customer Tom",
+    "expected_intent": "create_customer",
+    "expected_entities": {
+      "name": "Tom"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "open ahmed account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "show me john",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "john"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "customer details for chloe",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "chloe"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "what's going on with Ahmed",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "open customer Dave",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "Dave"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "john account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "john"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "amet account",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "amet"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "can you find Steve",
+    "expected_intent": "search_customer",
+    "expected_entities": {
+      "customer_name_query": "Steve"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "show the previous customer",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "reference": "previous_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "open that customer again",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "bring back the last customer",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "change ahmed number to 07111111111",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Ahmed",
+      "phone": "07111111111"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "change Sarah Jones number",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Sarah Jones"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new number for Mark is 07777770000",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Mark",
+      "phone": "07777770000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "set Dave's number as 07888881111",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Dave",
+      "phone": "07888881111"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "update phone for Tom",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "Tom"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "change the last customer's phone to 07101010101",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "reference": "last_customer",
+      "phone": "07101010101"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "new job for Ahmed kitchen fitting",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Ahmed",
+      "job_title": "kitchen fitting"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "book in a job for Mark bathroom tiles",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Mark",
+      "job_title": "bathroom tiles"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "new job for Dave",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "Dave"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "make a new job called fence repair for John",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "John",
+      "job_title": "fence repair"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "new job boiler swap",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "job_title": "boiler swap"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "book that customer in for plastering",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "reference": "last_customer",
+      "job_title": "plastering"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "another job for him, door fitting",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "reference": "last_customer",
+      "job_title": "door fitting"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create job for the previous customer socket replacement",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "reference": "previous_customer",
+      "job_title": "socket replacement"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "creat job for mark sink repair",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "mark",
+      "job_title": "sink repair"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "new job john kitchen plumbing",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "job_title": "kitchen plumbing"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "job for sarah oven installation",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "sarah",
+      "job_title": "oven installation"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "create a kitchen cabinet job for mehmet",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "mehmet",
+      "job_title": "kitchen cabinet"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "show Ahmed jobs",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "jobs for that customer",
+    "expected_intent": "list_jobs",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "complete Ahmed kitchen fitting",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "Ahmed",
+      "job_title_query": "kitchen fitting",
+      "status": "completed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "mark that job as completed",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "close this one",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put the last job as done",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "set Mark bathroom tiles in progress",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "Mark",
+      "job_title_query": "bathroom tiles",
+      "status": "in_progress"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "mark John job complete",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "John",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "set that one to in progress",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "in_progress"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "reopen the last job",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "open"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "mark fence repair for John as cancelled",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "customer_name_query": "John",
+      "job_title_query": "fence repair",
+      "status": "cancelled"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "complete the previous job",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "previous_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "that boiler job is done now",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "job_title_query": "boiler job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "John paid 150 today",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "John",
+      "amount": 150,
+      "date_text": "today",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "received 300 from Mark",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mark",
+      "amount": 300,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "add 120 payment from Sarah",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Sarah",
+      "amount": 120,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Ahmed paid \u00a3250",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ahmed",
+      "amount": 250,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "save payment 220 from Dave",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Dave",
+      "amount": 220,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "record payment for Ahmed",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "add payment",
+    "expected_intent": "record_payment",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add 200 to that",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "reference": "last_customer_or_job",
+      "amount": 200,
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "he paid 180",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "reference": "last_customer",
+      "amount": 180,
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add payment to that one 150",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "reference": "last_customer_or_job",
+      "amount": 150,
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "john paid 250 add it",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "amount": 250,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "add paymnt 200 from john",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "amount": 200,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "jhon paid 200 add it",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "jhon",
+      "amount": 200,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "add 300 pounds for Mehdi",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mehdi",
+      "amount": 300,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "take 90 off Dave account he paid today",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Dave",
+      "amount": 90,
+      "date_text": "today",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "received another 100 from him",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "reference": "last_customer",
+      "amount": 100,
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "payments from Ahmed",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "what did John pay",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "customer_name_query": "John"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "show payments for that customer",
+    "expected_intent": "list_payments",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "does Ahmed owe anything",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "customer_name_query": "Ahmed"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "debt for that customer",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "earnings",
+    "expected_intent": "get_financial_summary",
+    "expected_entities": {
+      "metric": "income"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "create invoice for John Smith",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "John Smith"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice Ahmed for kitchen fitting",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Ahmed",
+      "job_title_query": "kitchen fitting"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "send invoice for Mark",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Mark"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "create invoice for him",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice that one",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "reference": "last_customer_or_job"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "can you invoice Liam Brown",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "Liam Brown"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice the last customer",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "make invoice for that boiler job",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "reference": "last_job",
+      "job_title_query": "boiler job"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice John for 450",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "John",
+      "amount": 450,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "new invoice",
+    "expected_intent": "create_invoice",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invoice for yesterday's job",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "date_text": "yesterday",
+      "reference": "job_by_date"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "expense 240 for tiles on Mark bathroom job",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "amount": 240,
+      "category": "tiles",
+      "job_customer_name_query": "Mark",
+      "job_title_query": "bathroom job",
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "add expense",
+    "expected_intent": "record_expense",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "charge 22 parking to that job",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "reference": "last_job",
+      "amount": 22,
+      "category": "parking",
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put 150 materials on the last job",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "reference": "last_job",
+      "amount": 150,
+      "category": "materials",
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "sort that out for me",
+    "expected_intent": "unknown",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "done",
+    "expected_intent": "unknown",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "ok",
+    "expected_intent": "unknown",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "can you help",
+    "expected_intent": "unknown",
+    "expected_entities": {
+      "requested_help": true
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what can you do",
+    "expected_intent": "unknown",
+    "expected_entities": {
+      "requested_help": true
+    },
+    "should_clarify": false,
+    "should_disambiguate": false
+  },
+  {
+    "input": "show me something",
+    "expected_intent": "unknown",
+    "expected_entities": {},
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "put it on there",
+    "expected_intent": "unknown",
+    "expected_entities": {
+      "reference": "implicit"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "make it done",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "add that payment",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "reference": "pending_payment"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "same again for him",
+    "expected_intent": "unknown",
+    "expected_entities": {
+      "reference": "last_customer"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "shw john accnt",
+    "expected_intent": "get_customer_account",
+    "expected_entities": {
+      "customer_name_query": "john"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "updte john num 07999900000",
+    "expected_intent": "update_customer",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "phone": "07999900000"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "new jb for ahmed tap fix",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "ahmed",
+      "job_title": "tap fix"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "mrk last jb done",
+    "expected_intent": "update_job_status",
+    "expected_entities": {
+      "reference": "last_job",
+      "status": "completed"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "invocie john",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "customer_name_query": "john"
+    },
+    "should_clarify": true,
+    "should_disambiguate": true
+  },
+  {
+    "input": "john settled up 400",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "amount": 400,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "put john down as paid 400",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "john",
+      "amount": 400,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "book ahmed in for monday boiler check",
+    "expected_intent": "create_job",
+    "expected_entities": {
+      "customer_name_query": "ahmed",
+      "job_title": "boiler check",
+      "date_text": "monday"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "need an invoice for the last job",
+    "expected_intent": "create_invoice",
+    "expected_entities": {
+      "reference": "last_job"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "what did john owe again",
+    "expected_intent": "list_debts",
+    "expected_entities": {
+      "customer_name_query": "john"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "log 65 on bits for that job",
+    "expected_intent": "record_expense",
+    "expected_entities": {
+      "reference": "last_job",
+      "amount": 65,
+      "category": "supplies",
+      "note": "bits",
+      "currency": "GBP"
+    },
+    "should_clarify": true,
+    "should_disambiguate": false
+  },
+  {
+    "input": "Oliver paid 60",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Oliver",
+      "amount": 60,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Harry paid 85",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Harry",
+      "amount": 85,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Ella paid 110",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ella",
+      "amount": 110,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "George paid 145",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "George",
+      "amount": 145,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Ruby paid 200",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Ruby",
+      "amount": 200,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Noah paid 275",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Noah",
+      "amount": 275,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Mia paid 320",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Mia",
+      "amount": 320,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Leo paid 450",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Leo",
+      "amount": 450,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Grace paid 60",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Grace",
+      "amount": 60,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "Archie paid 85",
+    "expected_intent": "record_payment",
+    "expected_entities": {
+      "customer_name_query": "Archie",
+      "amount": 85,
+      "currency": "GBP"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  },
+  {
+    "input": "bring John records as a pdf",
+    "expected_intent": "export_customer_records",
+    "expected_entities": {
+      "customer_name_query": "John"
+    },
+    "should_clarify": false,
+    "should_disambiguate": true
+  }
+]
