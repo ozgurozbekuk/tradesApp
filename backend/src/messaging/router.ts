@@ -9,6 +9,7 @@ import { ReportsService } from "../services/reports.service";
 import { SubscriptionService } from "../services/subscription.service";
 import { UsersService } from "../services/users.service";
 import { CustomersService } from "../services/customers.service";
+import { BookingsService } from "../services/bookings.service";
 import { ExportService } from "../services/export.service";
 import { VendorPaymentsService } from "../services/vendor-payments.service";
 import { ToolExecutor } from "./agent/tools/tool-executor";
@@ -30,6 +31,8 @@ import { env } from "../config/env";
 import { buildPlanTodayToolExecutor } from "./agent-first/agent-first-runtime";
 import { interpretWithSemanticAgent, PLAN_TODAY_PATTERN } from "./semantic-agent/interpreter";
 import { resolveSemanticCapability } from "./semantic-agent/runtime";
+import { buildSemanticClarification } from "./semantic-agent/clarification";
+import { manageDialogTurn } from "./dialog-manager";
 
 export type IncomingMessage = {
   from: string;
@@ -46,6 +49,7 @@ const usersService = new UsersService();
 const jobsService = new JobsService();
 const paymentsService = new PaymentsService();
 const customersService = new CustomersService();
+const bookingsService = new BookingsService();
 const remindersService = new RemindersService();
 const reportsService = new ReportsService();
 const exportService = new ExportService();
@@ -106,6 +110,9 @@ const mergeParseContexts = (...contexts: Array<Partial<ReturnType<typeof convers
     }
     if (context.lastIntent) {
       acc.lastIntent = context.lastIntent;
+    }
+    if (context.recentTurns?.length) {
+      acc.recentTurns = context.recentTurns;
     }
     if (context.pendingFlow) {
       acc.pendingFlow = context.pendingFlow;
@@ -429,6 +436,8 @@ const resolvePendingCustomerCandidate = (input: {
   return input.candidates.find((candidate) => text.includes(candidate.name.toLowerCase())) ?? null;
 };
 
+const isAllSelectionReply = (message: string) => /^(?:all|all date|all dates|all records|everything)$/i.test(message.trim());
+
 const resolvePendingVendorCandidate = (input: {
   message: string;
   candidates: Array<{ id: string; vendorName: string; balancePence: number }>;
@@ -493,7 +502,8 @@ const createCustomerDisambiguationReply = (input: {
     | "add_payment"
     | "customer_find"
     | "close_jobs"
-    | "job_create";
+    | "job_create"
+    | "booking_create";
   candidates: Array<{ id: string; name: string; phone: string | null }>;
 }) => {
   const lines = input.candidates
@@ -515,6 +525,8 @@ const createCustomerDisambiguationReply = (input: {
             ? `Reply with number or phone digits to close jobs: ${lines}`
         : input.action === "job_create"
           ? `Reply with number or phone digits to create job: ${lines}`
+          : input.action === "booking_create"
+            ? `Reply with number or phone digits to create booking: ${lines}`
           : input.action === "invoice_pdf"
             ? `Reply with number or phone digits to create invoice: ${lines}`
       : `Reply with number or phone digits: ${lines}`;
@@ -631,7 +643,8 @@ const resolveCustomerOrReply = async (input: {
     | "add_payment"
     | "customer_find"
     | "close_jobs"
-    | "job_create";
+    | "job_create"
+    | "booking_create";
   query: string;
   targetPhone?: string;
   targetPayment?: {
@@ -644,6 +657,11 @@ const resolveCustomerOrReply = async (input: {
     totalPence: number;
     depositPence?: number;
     dueDate?: Date;
+    notes?: string;
+  };
+  targetBooking?: {
+    startsAt: Date;
+    title?: string;
     notes?: string;
   };
 }): Promise<
@@ -663,6 +681,7 @@ const resolveCustomerOrReply = async (input: {
   }
 
   if (resolution.status === "ambiguous") {
+    conversationMemory.clearPendingFlow(input.phone);
     conversationMemory.setLastResolvedCandidates(
       input.phone,
       resolution.candidates.map((candidate) => ({
@@ -677,6 +696,7 @@ const resolveCustomerOrReply = async (input: {
       targetPhone: input.targetPhone,
       targetPayment: input.targetPayment,
       targetJob: input.targetJob,
+      targetBooking: input.targetBooking,
       candidates: resolution.candidates
     });
     return {
@@ -891,6 +911,43 @@ const executeIntent = async (input: {
     return {
       reply: adminReply(
         `Customer saved: ${created.name}${created.phone ? ` (${created.phone})` : ""}.`
+      )
+    };
+  }
+
+  if (intent.type === "booking_create") {
+    const customerResolution = await resolveCustomerOrReply({
+      userId,
+      phone,
+      action: "booking_create",
+      query: intent.customerName,
+      targetBooking: {
+        startsAt: intent.startsAt,
+        title: intent.title,
+        notes: intent.notes
+      }
+    });
+
+    if (customerResolution.status === "reply") {
+      return customerResolution.routed;
+    }
+
+    const created = await bookingsService.createBookingForCustomerId({
+      userId,
+      customerId: customerResolution.customer.id,
+      startsAt: intent.startsAt,
+      title: intent.title,
+      notes: intent.notes
+    });
+
+    conversationMemory.updateRecentCustomer(phone, {
+      customerId: created.customer.id,
+      customerName: created.customer.name
+    });
+
+    return {
+      reply: adminReply(
+        `Booking saved for ${created.customer.name} on ${created.booking.startsAt.toISOString().slice(0, 16).replace("T", " ")}.`
       )
     };
   }
@@ -1873,11 +1930,15 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
 
   const user = await usersService.findByPhone(message.from);
   const previousParseDecision = conversationMemory.getLastParseDecision(message.from);
-  const parseContext = mergeParseContexts(
+  let parseContext = mergeParseContexts(
     conversationMemory.getAgentParseContext(message.from),
     user ? await agentLearningService.getLearnedParseContext(user.id) : {}
   );
   const selectedFlow = selectAgentFlow(env.USE_AGENT_FIRST_ORCHESTRATION === true);
+  let bodyForInterpretation = body;
+  let parseResult:
+    | Awaited<ReturnType<typeof parseWithAgentLayer>>
+    | null = null;
 
   if (selectedFlow === "agent_first" && !user && PLAN_TODAY_PATTERN.test(body)) {
     return {
@@ -1895,10 +1956,96 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
             })
         })
       : undefined;
+  if (selectedFlow === "agent_first") {
+    const dialogResult = await manageDialogTurn({
+      message: body,
+      context: parseContext
+    });
+
+    if (dialogResult.status === "reply") {
+      return {
+        reply: assistantReply(dialogResult.reply)
+      };
+    }
+
+    if (dialogResult.status === "continue") {
+      bodyForInterpretation = dialogResult.message;
+      if (dialogResult.clearPendingFlow) {
+        conversationMemory.clearPendingFlow(message.from);
+        parseContext = {
+          ...parseContext,
+          pendingFlow: undefined
+        };
+      }
+    }
+
+    if (dialogResult.status === "pending_resolution") {
+      if (dialogResult.clearPendingFlow) {
+        conversationMemory.clearPendingFlow(message.from);
+      }
+
+      if (dialogResult.missingFields.length > 0) {
+        const clarification = buildSemanticClarification({
+          capability: dialogResult.capability,
+          entities: dialogResult.entities,
+          missingOrAmbiguous: dialogResult.missingFields
+        });
+        const question = dialogResult.question || clarification.question;
+        if (clarification.analysis.intent !== "unknown") {
+          conversationMemory.setPendingFlow(message.from, {
+            intent: clarification.analysis.intent,
+            entities: clarification.analysis.entities,
+            missingFields: clarification.analysis.missingFields,
+            followUpQuestion: question
+          });
+          conversationMemory.updateLastIntent(message.from, clarification.analysis.intent);
+        }
+
+        return {
+          reply: assistantReply(question)
+        };
+      }
+
+      const resolution = await resolveSemanticCapability({
+        userId: user?.id ?? "__anonymous__",
+        capability: dialogResult.capability,
+        entities: dialogResult.entities,
+        confidence: 0.9
+      });
+
+      if (resolution.status === "clarification") {
+        if (resolution.analysis.intent !== "unknown") {
+          conversationMemory.setPendingFlow(message.from, {
+            intent: resolution.analysis.intent,
+            entities: resolution.analysis.entities,
+            missingFields: resolution.analysis.missingFields,
+            followUpQuestion: resolution.analysis.followUpQuestion
+          });
+          conversationMemory.updateLastIntent(message.from, resolution.analysis.intent);
+        }
+
+        return {
+          reply: assistantReply(dialogResult.question || resolution.question)
+        };
+      }
+
+      if (resolution.intent) {
+        parseResult = {
+          status: "intent",
+          intent: resolution.intent,
+          confidence: 0.9,
+          source: "llm",
+          needsConfirmation: false,
+          normalizedText: bodyForInterpretation,
+          analysis: resolution.analysis
+        };
+      }
+    }
+  }
   const semanticResult =
-    selectedFlow === "agent_first"
+    selectedFlow === "agent_first" && !parseResult
       ? await interpretWithSemanticAgent({
-          message: body,
+          message: bodyForInterpretation,
           context: parseContext
         })
       : null;
@@ -1934,10 +2081,11 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     };
   }
 
-  let parseResult =
-    selectedFlow === "agent_first" && env.AGENT_LEGACY_FALLBACK_ENABLED !== true
+  parseResult =
+    parseResult ??
+    (selectedFlow === "agent_first" && env.AGENT_LEGACY_FALLBACK_ENABLED !== true
       ? null
-      : await parseWithAgentLayer(body, parseContext);
+      : await parseWithAgentLayer(bodyForInterpretation, parseContext));
 
   if (selectedFlow === "agent_first" && semanticResult?.status === "decision") {
     const resolution = await resolveSemanticCapability({
@@ -1988,7 +2136,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
         confidence: semanticResult.confidence,
         source: "llm" as const,
         needsConfirmation: false,
-        normalizedText: body,
+        normalizedText: bodyForInterpretation,
         analysis: resolution.analysis
       };
     } else if (env.AGENT_LEGACY_FALLBACK_ENABLED !== true) {
@@ -2094,6 +2242,38 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
         message: body,
         candidates: pendingCustomerDisambiguation.candidates
       });
+
+      if (!selected && isAllSelectionReply(body)) {
+        if (pendingCustomerDisambiguation.action === "customer_find") {
+          conversationMemory.clearPendingCustomerDisambiguation(message.from);
+          const records = (
+            await Promise.all(
+              pendingCustomerDisambiguation.candidates.map((candidate) =>
+                customersService.findRecordByCustomerId({
+                  userId: user.id,
+                  customerId: candidate.id
+                })
+              )
+            )
+          ).filter((record): record is NonNullable<typeof record> => Boolean(record));
+
+          if (records.length > 0) {
+            return {
+              reply: formatCustomerRecordsReply(records)
+            };
+          }
+        }
+
+        if (pendingCustomerDisambiguation.action === "export_pdf") {
+          conversationMemory.clearPendingCustomerDisambiguation(message.from);
+          return {
+            reply: adminReply(
+              `I found several customers for "${pendingCustomerDisambiguation.query}".`,
+              "Please pick one number for a single customer PDF, or say 'bring all records' for the full database."
+            )
+          };
+        }
+      }
 
       if (selected) {
         conversationMemory.clearPendingCustomerDisambiguation(message.from);
@@ -2286,6 +2466,34 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
             reply: adminReply(
               `Job logged for ${created.customer.name}: ${created.job.title}. Outstanding ${penceToPounds(outstandingPence)}.`,
               "Want me to draft a reminder message?"
+            )
+          };
+        }
+
+        if (pendingCustomerDisambiguation.action === "booking_create") {
+          const targetBooking = pendingCustomerDisambiguation.targetBooking;
+          if (!targetBooking) {
+            return {
+              reply: adminReply("I lost the pending booking details.", "Please send the booking again.")
+            };
+          }
+
+          const created = await bookingsService.createBookingForCustomerId({
+            userId: user.id,
+            customerId: selected.id,
+            startsAt: targetBooking.startsAt,
+            title: targetBooking.title,
+            notes: targetBooking.notes
+          });
+
+          conversationMemory.updateRecentCustomer(message.from, {
+            customerId: created.customer.id,
+            customerName: created.customer.name
+          });
+
+          return {
+            reply: adminReply(
+              `Booking saved for ${created.customer.name} on ${created.booking.startsAt.toISOString().slice(0, 16).replace("T", " ")}.`
             )
           };
         }

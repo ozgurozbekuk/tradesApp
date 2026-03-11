@@ -2,6 +2,7 @@ import { Router } from "express";
 import { env } from "../config/env";
 import { sendWhatsAppMessage, validateTwilioSignature } from "../integrations/twilio";
 import { routeIncomingMessage } from "../messaging/router";
+import { conversationMemory } from "../messaging/agent/context-memory";
 import { logInboundMessage, logOutboundMessage } from "../services/audit-logs.service";
 import { prisma } from "../db/prisma";
 
@@ -98,6 +99,15 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       from: phone,
       body,
       messageSid
+    });
+
+    conversationMemory.appendTurn(phone, {
+      role: "user",
+      text: body
+    });
+    conversationMemory.appendTurn(phone, {
+      role: "assistant",
+      text: routed.reply
     });
 
     let outbound;

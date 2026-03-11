@@ -58,6 +58,12 @@ export const capabilityPolicies: Record<Exclude<SemanticCapabilityName, "unknown
     allowPartialName: false,
     searchFirst: false
   },
+  create_booking: {
+    destructive: true,
+    allowPartialName: true,
+    searchFirst: true,
+    requiresResolvedCustomer: true
+  },
   create_job: {
     destructive: true,
     allowPartialName: true,
@@ -352,6 +358,19 @@ const compileDirectIntent = (capability: Exclude<SemanticCapabilityName, "unknow
           name: asString(entities.customerQuery || entities.name),
           phone: asOptionalString(entities.phone)
         }
+      : capability === "create_booking"
+        ? {
+            type: "booking_create",
+            customerName: asString(entities.customerQuery || entities.customerName),
+            startsAt:
+              typeof entities.startsAt === "string" && entities.startsAt
+                ? new Date(entities.startsAt)
+                : entities.startsAt instanceof Date
+                  ? entities.startsAt
+                  : new Date(""),
+            title: asOptionalString(entities.title),
+            notes: asOptionalString(entities.notes)
+          }
       : capability === "create_job"
         ? {
             type: "job_create",
@@ -504,6 +523,23 @@ const validateCapabilityInputs = (input: {
     }
     if (totalPence === undefined) {
       missingFields.push("totalPence");
+    }
+    return missingFields;
+  }
+
+  if (input.capability === "create_booking") {
+    const missingFields: string[] = [];
+    if (!customerQuery) {
+      missingFields.push("customerQuery");
+    }
+    const startsAt =
+      input.entities.startsAt instanceof Date
+        ? input.entities.startsAt
+        : typeof input.entities.startsAt === "string"
+          ? new Date(input.entities.startsAt)
+          : null;
+    if (!startsAt || Number.isNaN(startsAt.getTime())) {
+      missingFields.push("startsAt");
     }
     return missingFields;
   }

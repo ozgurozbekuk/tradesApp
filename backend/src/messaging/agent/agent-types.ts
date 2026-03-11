@@ -5,6 +5,7 @@ export type AgentIntentName =
   | "search_customer"
   | "get_customer_account"
   | "create_job"
+  | "create_booking"
   | "list_jobs"
   | "update_job_status"
   | "record_payment"
@@ -64,6 +65,10 @@ export type AgentParseContext = {
   lastJobId?: string;
   lastJobLabel?: string;
   lastIntent?: string;
+  recentTurns?: Array<{
+    role: "user" | "assistant";
+    text: string;
+  }>;
   learnedAliases?: Array<{
     phrase: string;
     targetType: "customer";

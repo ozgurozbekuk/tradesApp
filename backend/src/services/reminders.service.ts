@@ -1,4 +1,4 @@
-import { JobStatus, ReminderType, SubscriptionStatus } from "@prisma/client";
+import { BookingStatus, JobStatus, ReminderType, SubscriptionStatus } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { sendWhatsAppMessage } from "../integrations/twilio";
@@ -76,6 +76,19 @@ const compactDateInTz = (date: Date | null, timezone: string) => {
   }).format(date);
 };
 
+const compactTimeInTz = (date: Date | null, timezone: string) => {
+  if (!date) {
+    return "unscheduled";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+};
+
 const getDayWindowInTz = (date: Date, timezone: string, shiftDays = 0) => {
   const base = new Date(date);
   base.setUTCDate(base.getUTCDate() + shiftDays);
@@ -110,6 +123,20 @@ export class RemindersService {
     const now = input.now ?? new Date();
     const { start: dayStart, end: dayEnd } = getDayWindowInTz(now, timezone);
     const dueSoonEnd = new Date(dayEnd.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const todaysBookings = await prisma.booking.findMany({
+      where: {
+        userId: input.userId,
+        status: BookingStatus.scheduled,
+        startsAt: {
+          gte: dayStart,
+          lt: dayEnd
+        }
+      },
+      include: {
+        customer: true
+      },
+      orderBy: [{ startsAt: "asc" }]
+    });
 
     const activeJobs = await prisma.job.findMany({
       where: {
@@ -123,31 +150,22 @@ export class RemindersService {
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }]
     });
 
-    let scheduledToday = 0;
+    let scheduledToday = todaysBookings.length;
     let dueSoonCount = 0;
     let overdueCount = 0;
     let outstandingTotalPence = 0;
-    const todayJobs: TodayPlanSnapshot["todayJobs"] = [];
+    const todayJobs: TodayPlanSnapshot["todayJobs"] = todaysBookings.slice(0, 6).map((booking) => ({
+      customerName: booking.customer.name,
+      title: booking.title ?? "Booking",
+      scheduledFor: compactTimeInTz(booking.startsAt, timezone),
+      outstandingPence: 0
+    }));
     const dueSoonJobs: TodayPlanSnapshot["dueSoonJobs"] = [];
 
     for (const job of activeJobs) {
       const outstandingPence = calculateJobOutstandingPence(job);
       outstandingTotalPence += outstandingPence;
       const customerName = job.customer?.name ?? "Customer";
-      const scheduledAt = job.scheduledDate ?? job.dueDate;
-
-      if (scheduledAt && scheduledAt >= dayStart && scheduledAt < dayEnd) {
-        scheduledToday += 1;
-        if (todayJobs.length < 6) {
-          todayJobs.push({
-            customerName,
-            title: job.title,
-            scheduledFor: compactDateInTz(scheduledAt, timezone),
-            outstandingPence
-          });
-        }
-      }
-
       if (job.dueDate && job.dueDate >= dayStart && job.dueDate <= dueSoonEnd && outstandingPence > 0) {
         dueSoonCount += 1;
         if (dueSoonJobs.length < 6) {
@@ -358,6 +376,21 @@ export class RemindersService {
         continue;
       }
 
+      const todaysBookings = await prisma.booking.findMany({
+        where: {
+          userId: user.id,
+          status: BookingStatus.scheduled,
+          startsAt: {
+            gte: dayStart,
+            lt: dayEnd
+          }
+        },
+        include: {
+          customer: true
+        },
+        orderBy: [{ startsAt: "asc" }]
+      });
+
       const activeJobs = await prisma.job.findMany({
         where: {
           userId: user.id,
@@ -369,24 +402,19 @@ export class RemindersService {
         }
       });
 
-      let scheduledToday = 0;
+      let scheduledToday = todaysBookings.length;
       let dueSoonCount = 0;
       let overdueCount = 0;
       let outstandingTotal = 0;
-      const todayLines: string[] = [];
+      const todayLines: string[] = todaysBookings.slice(0, 4).map((booking) => {
+        const title = booking.title?.trim() ? ` - ${booking.title.trim()}` : "";
+        return `• ${compactTimeInTz(booking.startsAt, timezone)} ${booking.customer.name}${title}`;
+      });
       const dueSoonLines: string[] = [];
 
       for (const job of activeJobs) {
         const outstanding = calculateJobOutstandingPence(job);
         outstandingTotal += outstanding;
-
-        const scheduledAt = job.scheduledDate ?? job.dueDate;
-        if (scheduledAt && scheduledAt >= dayStart && scheduledAt < dayEnd) {
-          scheduledToday += 1;
-          if (todayLines.length < 4) {
-            todayLines.push(`• ${job.customer?.name ?? "Customer"} - ${job.title} (${compactDateInTz(scheduledAt, timezone)})`);
-          }
-        }
 
         if (job.dueDate && job.dueDate >= dayStart && job.dueDate <= dueSoonEnd && outstanding > 0) {
           dueSoonCount += 1;

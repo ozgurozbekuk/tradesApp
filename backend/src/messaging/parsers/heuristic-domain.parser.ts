@@ -78,6 +78,24 @@ const extractPaymentMethod = (text: string): "cash" | "bank" | "card" | undefine
   return undefined;
 };
 
+const extractJobListScope = (text: string): "active" | "due_week" | "last_30" | undefined => {
+  if (
+    /\b(active jobs|in progress jobs|open jobs|show jobs|show my jobs|list active jobs)\b/i.test(text)
+  ) {
+    return "active";
+  }
+
+  if (/\b(jobs due this week|due this week|this week's callouts|booked this week)\b/i.test(text)) {
+    return "due_week";
+  }
+
+  if (/\b(last 30 days|last thirty days|past 30 days|show completed jobs)\b/i.test(text)) {
+    return "last_30";
+  }
+
+  return undefined;
+};
+
 const extractRelativeDueDate = (text: string) => {
   const now = new Date();
 
@@ -120,6 +138,49 @@ const extractRelativeDueDate = (text: string) => {
   }
   date.setDate(date.getDate() + delta);
   return date;
+};
+
+const extractTimeOfDay = (text: string) => {
+  const meridiemMatch = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (meridiemMatch) {
+    let hour = Number(meridiemMatch[1]);
+    const minute = Number(meridiemMatch[2] ?? "0");
+    const meridiem = meridiemMatch[3].toLowerCase();
+    if (meridiem === "pm" && hour < 12) {
+      hour += 12;
+    }
+    if (meridiem === "am" && hour === 12) {
+      hour = 0;
+    }
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return { hour, minute };
+    }
+  }
+
+  const exactMatch = text.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!exactMatch) {
+    return undefined;
+  }
+
+  const hour = Number(exactMatch[1]);
+  const minute = Number(exactMatch[2]);
+  if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+    return { hour, minute };
+  }
+
+  return undefined;
+};
+
+const extractBookingStartsAt = (text: string) => {
+  const date = extractRelativeDueDate(text);
+  const time = extractTimeOfDay(text);
+  if (!date || !time) {
+    return undefined;
+  }
+
+  const startsAt = new Date(date);
+  startsAt.setUTCHours(time.hour, time.minute, 0, 0);
+  return startsAt;
 };
 
 const extractDateText = (text: string) => {
@@ -191,7 +252,7 @@ const extractJobStatusQuery = (text: string) => {
 };
 
 const extractRequestedJobStatus = (text: string): "completed" | "pending" | "canceled" | "active" | undefined => {
-  if (/\b(completed|done|finished)\b/i.test(text)) {
+  if (/\b(completed|complated|complete|done|finished|close|closed)\b/i.test(text)) {
     return "completed";
   }
   if (/\b(paused|pending|pause)\b/i.test(text)) {
@@ -205,6 +266,11 @@ const extractRequestedJobStatus = (text: string): "completed" | "pending" | "can
   }
   return undefined;
 };
+
+const isPureJobStatusReply = (text: string) =>
+  /^(?:active|completed|complated|complete|done|finished|close|closed|canceled|cancelled|pending|paused|pause)$/i.test(
+    text.trim()
+  );
 
 const extractCustomerQuery = (text: string, context?: AgentParseContext) => {
   const patterns = [
@@ -530,6 +596,8 @@ const parsePendingFlowFollowUp = (text: string, context?: AgentParseContext): Pa
   const amount = extractAmount(text);
   const phone = extractPhone(text);
   const method = extractPaymentMethod(text);
+  const scope = extractJobListScope(text);
+  const requestedStatus = extractRequestedJobStatus(text);
   const dueDate = extractRelativeDueDate(text);
   const title = extractJobTitle(text);
   const customerQuery = extractCustomerQuery(text, context);
@@ -582,6 +650,30 @@ const parsePendingFlowFollowUp = (text: string, context?: AgentParseContext): Pa
     mergedEntities.jobId = context.lastJobId;
     const idx = missingFields.findIndex((item) => item === "job" || item === "jobId");
     missingFields.splice(idx, 1);
+  }
+
+  if (
+    (missingFields.includes("job") || missingFields.includes("jobId")) &&
+    !mergedEntities.jobId &&
+    !(missingFields.includes("status") && requestedStatus && isPureJobStatusReply(text))
+  ) {
+    const inferredJobQuery = extractJobStatusQuery(text) || title || text.trim();
+    if (inferredJobQuery) {
+      mergedEntities.jobQuery = inferredJobQuery;
+      mergedEntities.jobTitleQuery = inferredJobQuery;
+      const idx = missingFields.findIndex((item) => item === "job" || item === "jobId");
+      missingFields.splice(idx, 1);
+    }
+  }
+
+  if (missingFields.includes("scope") && scope) {
+    mergedEntities.scope = scope;
+    missingFields.splice(missingFields.indexOf("scope"), 1);
+  }
+
+  if (missingFields.includes("status") && requestedStatus) {
+    mergedEntities.status = requestedStatus === "pending" ? "active" : requestedStatus;
+    missingFields.splice(missingFields.indexOf("status"), 1);
   }
 
   const executionIntent = (() => {
@@ -641,6 +733,35 @@ const parsePendingFlowFollowUp = (text: string, context?: AgentParseContext): Pa
             ? mergedEntities.customerQuery
             : context?.lastCustomerLabel
       } satisfies ParsedIntent;
+    }
+
+    if (pending.intent === "list_jobs" && typeof mergedEntities.scope === "string") {
+      return mergedEntities.scope === "due_week"
+        ? ({ type: "job_list_due_week" } satisfies ParsedIntent)
+        : mergedEntities.scope === "last_30"
+          ? ({ type: "job_list_last_30" } satisfies ParsedIntent)
+          : ({ type: "job_list_active" } satisfies ParsedIntent);
+    }
+
+    if (
+      pending.intent === "update_job_status" &&
+      typeof mergedEntities.status === "string" &&
+      (typeof mergedEntities.jobId === "string" || typeof mergedEntities.jobQuery === "string")
+    ) {
+      const jobRef =
+        typeof mergedEntities.jobId === "string"
+          ? mergedEntities.jobId
+          : (mergedEntities.jobQuery as string);
+      const status =
+        mergedEntities.status === "canceled"
+          ? "canceled"
+          : mergedEntities.status === "completed"
+            ? "completed"
+            : "active";
+
+      return status === "completed"
+        ? ({ type: "job_close", jobId: jobRef } satisfies ParsedIntent)
+        : ({ type: "job_set_status", jobId: jobRef, status } satisfies ParsedIntent);
     }
 
     return null;
@@ -1244,6 +1365,44 @@ export const parseHeuristicDomainIntent = (
             : { type: "job_set_status", jobId: jobQuery, status: executionStatus }
       });
     }
+  }
+
+  if (/^(?:book|schedule)\b/i.test(text) && !/\bjob\b/i.test(text)) {
+    const match =
+      text.match(/^(?:book|schedule)\s+(.+?)\s+for\s+(.+)$/i) ??
+      text.match(/^(?:book|schedule)\s+(.+?)\s+(tomorrow|next week|today|in \d+ (?:day|days|week|weeks).+)$/i);
+    const customerQuery =
+      match?.[1]?.trim() ||
+      (isCustomerReference(text) ? context?.lastCustomerLabel : undefined);
+    const startsAt = extractBookingStartsAt(text);
+    const missingFields = [];
+    if (!customerQuery) {
+      missingFields.push("customerQuery");
+    }
+    if (!startsAt) {
+      missingFields.push("startsAt");
+    }
+
+    return createResult({
+      intent: "create_booking",
+      confidence: missingFields.length === 0 ? 0.87 : 0.58,
+      entities: {
+        ...(customerQuery ? { customerQuery, customerName: customerQuery } : {}),
+        ...(startsAt ? { startsAt } : {})
+      },
+      missingFields,
+      executionIntent:
+        customerQuery && startsAt
+          ? {
+              type: "booking_create",
+              customerName: customerQuery,
+              startsAt
+            }
+          : null,
+      sessionReferences: {
+        usesLastCustomer: !match?.[1] && Boolean(customerQuery)
+      }
+    });
   }
 
   if (

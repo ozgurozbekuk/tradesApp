@@ -118,6 +118,50 @@ test("runtime resolves a single customer before executing", async () => {
   });
 });
 
+test("runtime resolves a customer before executing booking creation", async () => {
+  const { resolveSemanticCapability } = await import("../src/messaging/semantic-agent/runtime");
+  const startsAt = new Date("2026-03-12T10:00:00.000Z");
+
+  const result = await resolveSemanticCapability(
+    {
+      userId: "user-1",
+      capability: "create_booking",
+      entities: { customerQuery: "John", startsAt: startsAt.toISOString() }
+    },
+    {
+      resolveCustomer: async () => ({
+        status: "single" as const,
+        customer: {
+          id: "customer-1",
+          name: "John Smith",
+          phone: null,
+          createdAt: new Date(),
+          score: 1000
+        }
+      }),
+      resolveVendor: async () => ({
+        status: "vendor" as const,
+        vendor: {
+          id: "vendor-1",
+          vendorName: "Build Supplies Ltd"
+        }
+      })
+    }
+  );
+
+  assert.equal(result.status, "executable");
+  if (result.status !== "executable") {
+    return;
+  }
+
+  assert.equal(result.intent?.type, "booking_create");
+  if (result.intent?.type !== "booking_create") {
+    return;
+  }
+  assert.equal(result.intent.customerName, "John Smith");
+  assert.equal(result.intent.startsAt.toISOString(), startsAt.toISOString());
+});
+
 test("runtime asks for clarification when customer search is ambiguous", async () => {
   const { resolveSemanticCapability } = await import("../src/messaging/semantic-agent/runtime");
 

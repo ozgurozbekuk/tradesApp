@@ -33,6 +33,19 @@ const getRequiredClerkUserId = (input: { userId: string | null | undefined }) =>
   return userId;
 };
 
+const getRequiredAppUserId = async (clerkUserId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { clerkUserId },
+    select: { id: true }
+  });
+
+  if (!user) {
+    throw new Error("profile not completed");
+  }
+
+  return user.id;
+};
+
 accountRouter.use("/api", requireAuth());
 
 accountRouter.get("/api/account/me", async (req, res) => {
@@ -523,6 +536,292 @@ accountRouter.get("/api/dashboard/lists", async (req, res) => {
       lastActivityAt: debt.transactions[0]?.occurredAt.toISOString() ?? null
     }))
   });
+});
+
+accountRouter.patch("/api/customers/:customerId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const customerId = typeof req.params.customerId === "string" ? req.params.customerId.trim() : "";
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+
+  if (!customerId || !name) {
+    return res.status(400).json({ ok: false, error: "customerId and name are required" });
+  }
+
+  const existing = await prisma.customer.findFirst({
+    where: {
+      id: customerId,
+      userId
+    }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Customer not found" });
+  }
+
+  if (phone) {
+    const duplicate = await prisma.customer.findFirst({
+      where: {
+        userId,
+        phone,
+        NOT: {
+          id: customerId
+        }
+      },
+      select: { id: true }
+    });
+
+    if (duplicate) {
+      return res.status(409).json({ ok: false, error: "Phone already belongs to another customer" });
+    }
+  }
+
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      name,
+      phone: phone || null
+    }
+  });
+
+  return res.status(200).json({ ok: true, customer: updated });
+});
+
+accountRouter.delete("/api/customers/:customerId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const customerId = typeof req.params.customerId === "string" ? req.params.customerId.trim() : "";
+
+  if (!customerId) {
+    return res.status(400).json({ ok: false, error: "customerId is required" });
+  }
+
+  const existing = await prisma.customer.findFirst({
+    where: {
+      id: customerId,
+      userId
+    },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Customer not found" });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.job.deleteMany({
+      where: {
+        userId,
+        customerId
+      }
+    });
+
+    await tx.customer.delete({
+      where: { id: customerId }
+    });
+  });
+
+  return res.status(200).json({ ok: true });
+});
+
+accountRouter.patch("/api/jobs/:jobId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const jobId = typeof req.params.jobId === "string" ? req.params.jobId.trim() : "";
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const status = typeof req.body?.status === "string" ? req.body.status.trim() : "";
+  const priceTotalPence = Number(req.body?.priceTotalPence);
+  const depositPence = Number(req.body?.depositPence ?? 0);
+  const dueDateRaw = typeof req.body?.dueDate === "string" ? req.body.dueDate.trim() : "";
+
+  if (!jobId || !title || !Number.isFinite(priceTotalPence) || priceTotalPence < 0 || !Number.isFinite(depositPence) || depositPence < 0) {
+    return res.status(400).json({ ok: false, error: "Valid job title, price and deposit are required" });
+  }
+
+  if (!["active", "completed", "canceled"].includes(status)) {
+    return res.status(400).json({ ok: false, error: "Invalid job status" });
+  }
+
+  const dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
+  if (dueDateRaw && (!dueDate || Number.isNaN(dueDate.getTime()))) {
+    return res.status(400).json({ ok: false, error: "Invalid due date" });
+  }
+
+  const existing = await prisma.job.findFirst({
+    where: {
+      id: jobId,
+      userId
+    },
+    include: {
+      payments: true
+    }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Job not found" });
+  }
+
+  const paidPence = existing.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+  const previousOutstandingPence = Math.max(existing.priceTotalPence - paidPence, 0);
+  const nextOutstandingPence = Math.max(priceTotalPence - paidPence, 0);
+  const balanceDelta = nextOutstandingPence - previousOutstandingPence;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const job = await tx.job.update({
+      where: { id: jobId },
+      data: {
+        title,
+        status: status as JobStatus,
+        priceTotalPence,
+        depositPence,
+        dueDate
+      }
+    });
+
+    if (existing.customerId && balanceDelta !== 0) {
+      await tx.customer.update({
+        where: { id: existing.customerId },
+        data: {
+          balancePence: {
+            increment: balanceDelta
+          }
+        }
+      });
+    }
+
+    return job;
+  });
+
+  return res.status(200).json({ ok: true, job: updated });
+});
+
+accountRouter.delete("/api/jobs/:jobId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const jobId = typeof req.params.jobId === "string" ? req.params.jobId.trim() : "";
+
+  if (!jobId) {
+    return res.status(400).json({ ok: false, error: "jobId is required" });
+  }
+
+  const existing = await prisma.job.findFirst({
+    where: {
+      id: jobId,
+      userId
+    },
+    include: {
+      payments: true
+    }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Job not found" });
+  }
+
+  const outstandingPence = Math.max(
+    existing.priceTotalPence - existing.payments.reduce((sum, payment) => sum + payment.amountPence, 0),
+    0
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.job.delete({
+      where: { id: jobId }
+    });
+
+    if (existing.customerId && outstandingPence > 0) {
+      await tx.customer.update({
+        where: { id: existing.customerId },
+        data: {
+          balancePence: {
+            decrement: outstandingPence
+          }
+        }
+      });
+    }
+  });
+
+  return res.status(200).json({ ok: true });
+});
+
+accountRouter.patch("/api/expenses/:expenseId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const expenseId = typeof req.params.expenseId === "string" ? req.params.expenseId.trim() : "";
+  const counterpartyName =
+    typeof req.body?.counterpartyName === "string" ? req.body.counterpartyName.trim() : "";
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  const amountPence = Number(req.body?.amountPence);
+  const occurredAtRaw = typeof req.body?.occurredAt === "string" ? req.body.occurredAt.trim() : "";
+
+  if (!expenseId || !counterpartyName || !note || !Number.isFinite(amountPence) || amountPence <= 0) {
+    return res.status(400).json({ ok: false, error: "Valid supplier, note and amount are required" });
+  }
+
+  const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : null;
+  if (!occurredAt || Number.isNaN(occurredAt.getTime())) {
+    return res.status(400).json({ ok: false, error: "Invalid expense date" });
+  }
+
+  const existing = await prisma.moneyTransaction.findFirst({
+    where: {
+      id: expenseId,
+      userId,
+      kind: "expense_paid"
+    },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Expense not found" });
+  }
+
+  const updated = await prisma.moneyTransaction.update({
+    where: { id: expenseId },
+    data: {
+      counterpartyName,
+      note,
+      amountPence,
+      occurredAt
+    }
+  });
+
+  return res.status(200).json({ ok: true, expense: updated });
+});
+
+accountRouter.delete("/api/expenses/:expenseId", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const expenseId = typeof req.params.expenseId === "string" ? req.params.expenseId.trim() : "";
+
+  if (!expenseId) {
+    return res.status(400).json({ ok: false, error: "expenseId is required" });
+  }
+
+  const existing = await prisma.moneyTransaction.findFirst({
+    where: {
+      id: expenseId,
+      userId,
+      kind: "expense_paid"
+    },
+    select: { id: true }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Expense not found" });
+  }
+
+  await prisma.moneyTransaction.delete({
+    where: { id: expenseId }
+  });
+
+  return res.status(200).json({ ok: true });
 });
 
 accountRouter.get("/api/account/activation", async (_req, res) => {

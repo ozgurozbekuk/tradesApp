@@ -18,6 +18,13 @@ export const IntentSchema = z.discriminatedUnion("type", [
     dueDate: z.date().optional(),
     notes: z.string().optional()
   }),
+  z.object({
+    type: z.literal("booking_create"),
+    customerName: z.string().min(1),
+    startsAt: z.date(),
+    title: z.string().optional(),
+    notes: z.string().optional()
+  }),
   z.object({ type: z.literal("job_list_active") }),
   z.object({ type: z.literal("job_list_due_week") }),
   z.object({ type: z.literal("job_list_last_30") }),
@@ -103,6 +110,7 @@ export type ParsedIntent = z.infer<typeof IntentSchema>;
 export const WriteIntentTypeSchema = z.enum([
   "customer_create",
   "job_create",
+  "booking_create",
   "payment_add",
   "job_close",
   "job_set_status",

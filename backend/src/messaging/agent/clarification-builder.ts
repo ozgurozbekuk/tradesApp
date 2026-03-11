@@ -70,6 +70,14 @@ export const buildClarificationQuestion = (input: {
     return "Customer name is missing. Who should I create the job for?";
   }
 
+  if (input.intent === "create_booking" && (missing === "customer" || missing === "customerQuery")) {
+    return "Who should I book in?";
+  }
+
+  if (input.intent === "create_booking" && (missing === "startsAt" || missing === "dateTime")) {
+    return "What date and time should I book them in for?";
+  }
+
   if (input.intent === "create_job" && missing === "title" && customer) {
     return `I can create a job for ${customer}. What is the job title?`;
   }
@@ -96,6 +104,10 @@ export const buildClarificationQuestion = (input: {
 
   if (input.intent === "update_job_status" && (missing === "job" || missing === "jobId")) {
     return "Which job should I mark as completed?";
+  }
+
+  if (input.intent === "update_job_status" && missing === "status") {
+    return "What status should I set for that job: active, completed, or canceled?";
   }
 
   if (input.intent === "create_invoice" && (missing === "customer" || missing === "customerQuery")) {

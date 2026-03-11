@@ -72,6 +72,35 @@ type ActivityItem = {
   icon: "customer" | "job" | "payment" | "expense" | "debt";
 };
 
+type CustomerEditorState = {
+  id: string;
+  name: string;
+  phone: string;
+};
+
+type JobEditorState = {
+  id: string;
+  title: string;
+  status: string;
+  priceTotal: string;
+  deposit: string;
+  dueDate: string;
+};
+
+type ExpenseEditorState = {
+  id: string;
+  counterpartyName: string;
+  note: string;
+  amount: string;
+  occurredAt: string;
+};
+
+type DeleteDialogState = {
+  resource: "customer" | "job" | "expense";
+  id: string;
+  label: string;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 const pounds = new Intl.NumberFormat("en-GB", {
@@ -259,6 +288,40 @@ const Panel = ({
   </section>
 );
 
+const ModalShell = ({
+  title,
+  description,
+  onClose,
+  children
+}: {
+  title: string;
+  description: string;
+  onClose: () => void;
+  children: ReactNode;
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+    <div className="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-semibold text-slate-950">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Close dialog"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+            <path fill="currentColor" d="m6.53 5.47 5.47 5.47 5.47-5.47 1.06 1.06L13.06 12l5.47 5.47-1.06 1.06L12 13.06l-5.47 5.47-1.06-1.06L10.94 12 5.47 6.53l1.06-1.06Z" />
+          </svg>
+        </button>
+      </div>
+      <div className="mt-6">{children}</div>
+    </div>
+  </div>
+);
+
 const TablePanel = ({
   id,
   title,
@@ -338,6 +401,19 @@ const fullDate = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   year: "numeric"
 });
+
+const toDateInputValue = (value: string | null) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
+};
 
 const getDebtStatusMeta = (status: string, dueDate: string | null) => {
   const normalized = status.toLowerCase();
@@ -432,22 +508,32 @@ const DashboardInner = () => {
   const [lists, setLists] = useState<DashboardListsResponse | null>(null);
   const [search, setSearch] = useState("");
   const [jobFilter, setJobFilter] = useState("all");
+  const [actionError, setActionError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [customerEditor, setCustomerEditor] = useState<CustomerEditorState | null>(null);
+  const [jobEditor, setJobEditor] = useState<JobEditorState | null>(null);
+  const [expenseEditor, setExpenseEditor] = useState<ExpenseEditorState | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState | null>(null);
   const isCustomersView = location.pathname === "/customers";
   const isJobsView = location.pathname === "/jobs";
   const isPaymentsView = location.pathname === "/dashboard" && ["#payments", "#debts"].includes(location.hash);
   const isExpensesView = location.pathname === "/dashboard" && location.hash === "#expenses";
   const isReportsView = location.pathname === "/dashboard" && location.hash === "#reports";
 
-  const fetchProtected = async <T,>(path: string): Promise<T> => {
+  const fetchProtected = async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const token = await getToken();
     if (!token) {
       throw new Error("Missing Clerk session token.");
     }
 
     const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: init?.method,
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...(init?.headers ?? {})
+      },
+      body: init?.body
     });
 
     const payload = (await response.json()) as T & { error?: string };
@@ -458,24 +544,28 @@ const DashboardInner = () => {
     return payload;
   };
 
+  const loadDashboard = async () => {
+    const me = await fetchProtected<MeResponse>("/api/account/me");
+
+    if (!me.user?.businessName || !me.user?.phone || !me.user.phoneVerifiedAt) {
+      setRedirectToOnboarding(true);
+      return;
+    }
+
+    const [dashboard, listPayload] = await Promise.all([
+      fetchProtected<SummaryResponse>("/api/dashboard/summary"),
+      fetchProtected<DashboardListsResponse>("/api/dashboard/lists")
+    ]);
+
+    setBusinessName(me.user.businessName);
+    setSummary(dashboard.summary);
+    setLists(listPayload);
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
-        const me = await fetchProtected<MeResponse>("/api/account/me");
-
-        if (!me.user?.businessName || !me.user?.phone || !me.user.phoneVerifiedAt) {
-          setRedirectToOnboarding(true);
-          return;
-        }
-
-        const [dashboard, listPayload] = await Promise.all([
-          fetchProtected<SummaryResponse>("/api/dashboard/summary"),
-          fetchProtected<DashboardListsResponse>("/api/dashboard/lists")
-        ]);
-
-        setBusinessName(me.user.businessName);
-        setSummary(dashboard.summary);
-        setLists(listPayload);
+        await loadDashboard();
       } catch (loadError) {
         const message =
           loadError instanceof Error ? loadError.message : "Could not load dashboard.";
@@ -491,6 +581,18 @@ const DashboardInner = () => {
 
     void load();
   }, [getToken]);
+
+  const refreshDashboard = async () => {
+    await loadDashboard();
+  };
+
+  const closeDialogs = () => {
+    setCustomerEditor(null);
+    setJobEditor(null);
+    setExpenseEditor(null);
+    setDeleteDialog(null);
+    setActionError("");
+  };
 
   const filteredLists = useMemo(() => {
     if (!lists) {
@@ -838,6 +940,107 @@ const DashboardInner = () => {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6);
   }, [filteredLists]);
+
+  const submitCustomerEdit = async () => {
+    if (!customerEditor) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError("");
+
+    try {
+      await fetchProtected(`/api/customers/${customerEditor.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: customerEditor.name,
+          phone: customerEditor.phone
+        })
+      });
+      await refreshDashboard();
+      closeDialogs();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Could not update customer.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitJobEdit = async () => {
+    if (!jobEditor) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError("");
+
+    try {
+      await fetchProtected(`/api/jobs/${jobEditor.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: jobEditor.title,
+          status: jobEditor.status,
+          priceTotalPence: Math.round(Number(jobEditor.priceTotal || 0) * 100),
+          depositPence: Math.round(Number(jobEditor.deposit || 0) * 100),
+          dueDate: jobEditor.dueDate || null
+        })
+      });
+      await refreshDashboard();
+      closeDialogs();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Could not update job.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitExpenseEdit = async () => {
+    if (!expenseEditor) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError("");
+
+    try {
+      await fetchProtected(`/api/expenses/${expenseEditor.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          counterpartyName: expenseEditor.counterpartyName,
+          note: expenseEditor.note,
+          amountPence: Math.round(Number(expenseEditor.amount || 0) * 100),
+          occurredAt: expenseEditor.occurredAt
+        })
+      });
+      await refreshDashboard();
+      closeDialogs();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Could not update expense.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError("");
+
+    try {
+      await fetchProtected(`/api/${deleteDialog.resource}s/${deleteDialog.id}`, {
+        method: "DELETE"
+      });
+      await refreshDashboard();
+      closeDialogs();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : `Could not delete ${deleteDialog.resource}.`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (redirectToOnboarding) {
     return <Navigate to="/onboarding" replace />;
@@ -1545,12 +1748,32 @@ const DashboardInner = () => {
                                 <div className="flex justify-end gap-2 text-slate-400">
                                   <button
                                     aria-label={`Edit ${expense.note}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setExpenseEditor({
+                                        id: expense.id,
+                                        counterpartyName: expense.counterpartyName,
+                                        note: expense.note,
+                                        amount: (expense.amountPence / 100).toFixed(2),
+                                        occurredAt: toDateInputValue(expense.occurredAt)
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-emerald-500 transition hover:bg-emerald-50 hover:text-emerald-600"
                                   >
                                     <PencilIcon />
                                   </button>
                                   <button
                                     aria-label={`Delete ${expense.note}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setDeleteDialog({
+                                        resource: "expense",
+                                        id: expense.id,
+                                        label: expense.note
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-amber-500 transition hover:bg-amber-50 hover:text-amber-600"
                                   >
                                     <TrashIcon />
@@ -1710,12 +1933,30 @@ const DashboardInner = () => {
                                 <div className="flex justify-end gap-2 text-slate-400">
                                   <button
                                     aria-label={`Edit ${customer.name}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setCustomerEditor({
+                                        id: customer.id,
+                                        name: customer.name,
+                                        phone: customer.phone ?? ""
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-emerald-500 transition hover:bg-emerald-50 hover:text-emerald-600"
                                   >
                                     <PencilIcon />
                                   </button>
                                   <button
                                     aria-label={`Delete ${customer.name}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setDeleteDialog({
+                                        resource: "customer",
+                                        id: customer.id,
+                                        label: customer.name
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-amber-500 transition hover:bg-amber-50 hover:text-amber-600"
                                   >
                                     <TrashIcon />
@@ -1830,12 +2071,33 @@ const DashboardInner = () => {
                                 <div className="flex justify-end gap-2 text-slate-400">
                                   <button
                                     aria-label={`Edit ${job.title}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setJobEditor({
+                                        id: job.id,
+                                        title: job.title,
+                                        status: job.status,
+                                        priceTotal: (job.priceTotalPence / 100).toFixed(2),
+                                        deposit: (job.depositPence / 100).toFixed(2),
+                                        dueDate: toDateInputValue(job.scheduledDate ?? job.dueDate)
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-emerald-500 transition hover:bg-emerald-50 hover:text-emerald-600"
                                   >
                                     <PencilIcon />
                                   </button>
                                   <button
                                     aria-label={`Delete ${job.title}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setActionError("");
+                                      setDeleteDialog({
+                                        resource: "job",
+                                        id: job.id,
+                                        label: job.title
+                                      });
+                                    }}
                                     className="rounded-lg p-2 text-amber-500 transition hover:bg-amber-50 hover:text-amber-600"
                                   >
                                     <TrashIcon />
@@ -2145,6 +2407,238 @@ const DashboardInner = () => {
           </div>
         </main>
       </div>
+
+      {customerEditor ? (
+        <ModalShell
+          title="Edit customer"
+          description="Update the customer details shown in your dashboard."
+          onClose={closeDialogs}
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">
+              Name
+              <input
+                value={customerEditor.name}
+                onChange={(event) => setCustomerEditor({ ...customerEditor, name: event.target.value })}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Phone
+              <input
+                value={customerEditor.phone}
+                onChange={(event) => setCustomerEditor({ ...customerEditor, phone: event.target.value })}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              />
+            </label>
+            {actionError ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialogs}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitCustomerEdit()}
+                disabled={saving}
+                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {jobEditor ? (
+        <ModalShell
+          title="Edit job"
+          description="Update the job details from the jobs list."
+          onClose={closeDialogs}
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">
+              Title
+              <input
+                value={jobEditor.title}
+                onChange={(event) => setJobEditor({ ...jobEditor, title: event.target.value })}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Status
+                <select
+                  value={jobEditor.status}
+                  onChange={(event) => setJobEditor({ ...jobEditor, status: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="canceled">Canceled</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Due date
+                <input
+                  type="date"
+                  value={jobEditor.dueDate}
+                  onChange={(event) => setJobEditor({ ...jobEditor, dueDate: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Total price (GBP)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={jobEditor.priceTotal}
+                  onChange={(event) => setJobEditor({ ...jobEditor, priceTotal: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Deposit (GBP)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={jobEditor.deposit}
+                  onChange={(event) => setJobEditor({ ...jobEditor, deposit: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+            </div>
+            {actionError ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialogs}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitJobEdit()}
+                disabled={saving}
+                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {expenseEditor ? (
+        <ModalShell
+          title="Edit expense"
+          description="Update the supplier transaction details."
+          onClose={closeDialogs}
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">
+              Supplier
+              <input
+                value={expenseEditor.counterpartyName}
+                onChange={(event) =>
+                  setExpenseEditor({ ...expenseEditor, counterpartyName: event.target.value })
+                }
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Expense note
+              <input
+                value={expenseEditor.note}
+                onChange={(event) => setExpenseEditor({ ...expenseEditor, note: event.target.value })}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Amount (GBP)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={expenseEditor.amount}
+                  onChange={(event) => setExpenseEditor({ ...expenseEditor, amount: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Date
+                <input
+                  type="date"
+                  value={expenseEditor.occurredAt}
+                  onChange={(event) => setExpenseEditor({ ...expenseEditor, occurredAt: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+            </div>
+            {actionError ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialogs}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitExpenseEdit()}
+                disabled={saving}
+                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {deleteDialog ? (
+        <ModalShell
+          title={`Delete ${deleteDialog.resource}`}
+          description={`This will permanently remove ${deleteDialog.label}.`}
+          onClose={closeDialogs}
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {deleteDialog.resource === "customer"
+                ? "Deleting a customer will also remove that customer's jobs from the dashboard."
+                : "This action cannot be undone."}
+            </div>
+            {actionError ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialogs}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={saving}
+                className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
     </div>
   );
 };

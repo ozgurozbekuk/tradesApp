@@ -23,6 +23,7 @@ const summarizeContextForPrompt = (context?: AgentParseContext) => {
     lastCustomer: context.lastCustomerLabel ?? null,
     lastJob: context.lastJobLabel ?? null,
     lastIntent: context.lastIntent ?? null,
+    recentTurns: context.recentTurns ?? [],
     pendingFlow: context.pendingFlow ?? null,
     recentCandidates: context.lastResolvedCandidates ?? [],
     learnedAliases: context.learnedAliases ?? [],

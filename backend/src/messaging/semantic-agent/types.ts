@@ -9,6 +9,7 @@ export type SemanticCapabilityName =
   | "get_recent_payments"
   | "create_customer"
   | "create_job"
+  | "create_booking"
   | "list_jobs"
   | "update_job_status"
   | "record_payment"

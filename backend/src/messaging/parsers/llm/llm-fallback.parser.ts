@@ -41,6 +41,7 @@ const summarizeContextForPrompt = (context?: AgentParseContext) => {
       lastJob: context.lastJobLabel ?? null,
       lastIntent: context.lastIntent ?? null
     },
+    recentTurns: context.recentTurns ?? [],
     pendingFlow: context.pendingFlow
       ? {
           intent: context.pendingFlow.intent,
@@ -209,13 +210,14 @@ Rules:
   }
 }
 - Valid intent types:
-onboarding_submit, customer_create, job_create, job_list_active, job_list_due_week, job_list_last_30, job_close,
+onboarding_submit, customer_create, job_create, booking_create, job_list_active, job_list_due_week, job_list_last_30, job_close,
 job_close_customer, customer_find, customer_update_phone, briefing_toggle, summary_7, summary_30, expense_list, expense_add, vendor_debt_add, vendor_payment_add, vendor_summary, export_data, export_pdf, export_vendor_pdf, export_expense_pdf, invoice_create, subscribe, outstanding_list,
 payment_add, payment_list, expense_add_batch, help, confirm_action, cancel_action, greeting, unknown
 - Valid parsedUserIntent.intent values:
-create_customer, search_customer, get_customer_account, create_job, list_jobs, update_job_status, record_payment, record_expense, list_payments, list_debts, get_financial_summary, create_invoice, clarification_needed, unknown
+create_customer, search_customer, get_customer_account, create_job, create_booking, list_jobs, update_job_status, record_payment, record_expense, list_payments, list_debts, get_financial_summary, create_invoice, clarification_needed, unknown
 - For customer_create: include name and optional phone.
 - For job_create: customerName, title, totalPence (integer).
+- For booking_create: customerName and startsAt (ISO datetime string).
 - For job_create, if the user says "new customer/costumer/client" and also includes job + price/total, treat it as creating a customer and their first job in one message.
 - For payment_add: amountPence (integer), optional jobId/customerName/method/note.
 - For payment_list: include range when present: today, yesterday, week, month, all.
@@ -282,6 +284,13 @@ const coerceIntent = (value: Record<string, unknown> | undefined): ParsedIntent 
     const date = new Date(cloned.dueDate);
     if (!Number.isNaN(date.getTime())) {
       cloned.dueDate = date;
+    }
+  }
+
+  if (typeof cloned.startsAt === "string") {
+    const date = new Date(cloned.startsAt);
+    if (!Number.isNaN(date.getTime())) {
+      cloned.startsAt = date;
     }
   }
 

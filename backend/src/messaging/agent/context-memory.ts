@@ -21,7 +21,8 @@ type PendingCustomerDisambiguation = {
     | "add_payment"
     | "customer_find"
     | "close_jobs"
-    | "job_create";
+    | "job_create"
+    | "booking_create";
   query: string;
   targetPhone?: string;
   targetPayment?: {
@@ -34,6 +35,11 @@ type PendingCustomerDisambiguation = {
     totalPence: number;
     depositPence?: number;
     dueDate?: Date;
+    notes?: string;
+  };
+  targetBooking?: {
+    startsAt: Date;
+    title?: string;
     notes?: string;
   };
   candidates: Array<{
@@ -97,6 +103,11 @@ type ConversationContext = {
   lastJobTitle?: string;
   lastIntent?: string;
   pendingFlow?: AgentPendingFlow;
+  recentTurns?: Array<{
+    role: "user" | "assistant";
+    text: string;
+    recordedAt: number;
+  }>;
   lastResolvedCandidates?: Array<{
     id: string;
     label: string;
@@ -109,6 +120,7 @@ type ConversationContext = {
 const CONTEXT_TTL_MS = 30 * 60 * 1000;
 const PENDING_TTL_MS = 5 * 60 * 1000;
 const PENDING_CUSTOMER_DISAMBIGUATION_TTL_MS = 10 * 60 * 1000;
+const RECENT_TURNS_LIMIT = 8;
 const store = new Map<string, ConversationContext>();
 
 const now = () => Date.now();
@@ -187,6 +199,24 @@ export const conversationMemory = {
     store.set(phone, ctx);
   },
 
+  appendTurn(phone: string, input: { role: "user" | "assistant"; text: string }) {
+    const ctx = getOrCreate(phone);
+    const text = input.text.trim();
+    if (!text) {
+      return;
+    }
+
+    const recentTurns = ctx.recentTurns ?? [];
+    recentTurns.push({
+      role: input.role,
+      text,
+      recordedAt: now()
+    });
+    ctx.recentTurns = recentTurns.slice(-RECENT_TURNS_LIMIT);
+    ctx.updatedAt = now();
+    store.set(phone, ctx);
+  },
+
   getAgentParseContext(phone: string): AgentParseContext {
     const ctx = getOrCreate(phone);
     return {
@@ -196,6 +226,10 @@ export const conversationMemory = {
       lastJobLabel: ctx.lastJobTitle,
       lastIntent: ctx.lastIntent,
       pendingFlow: ctx.pendingFlow,
+      recentTurns: ctx.recentTurns?.map((turn) => ({
+        role: turn.role,
+        text: turn.text
+      })),
       lastResolvedCandidates: ctx.lastResolvedCandidates
     };
   },
@@ -297,7 +331,8 @@ export const conversationMemory = {
         | "add_payment"
         | "customer_find"
         | "close_jobs"
-        | "job_create";
+        | "job_create"
+        | "booking_create";
       query: string;
       targetPhone?: string;
       targetPayment?: {
@@ -310,6 +345,11 @@ export const conversationMemory = {
         totalPence: number;
         depositPence?: number;
         dueDate?: Date;
+        notes?: string;
+      };
+      targetBooking?: {
+        startsAt: Date;
+        title?: string;
         notes?: string;
       };
       candidates: Array<{
@@ -326,6 +366,7 @@ export const conversationMemory = {
       targetPhone: input.targetPhone,
       targetPayment: input.targetPayment,
       targetJob: input.targetJob,
+      targetBooking: input.targetBooking,
       candidates: input.candidates,
       expiresAt: now() + PENDING_CUSTOMER_DISAMBIGUATION_TTL_MS
     };

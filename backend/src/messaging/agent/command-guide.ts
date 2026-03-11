@@ -9,6 +9,7 @@ const GUIDES = {
   ],
   jobs: [
     "NEW JOB customer: John; title: Boiler repair; total: 450",
+    "book John for tomorrow 10 am",
     "Active jobs",
     "close the boiler job"
   ],

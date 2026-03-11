@@ -15,13 +15,14 @@ export const PLAN_TODAY_PATTERN =
 
 const summarizeContextForPrompt = (context?: SemanticInterpretInput["context"]) =>
   context
-    ? {
-        lastCustomer: context.lastCustomerLabel ?? null,
-        lastJob: context.lastJobLabel ?? null,
-        lastIntent: context.lastIntent ?? null,
-        pendingFlow: context.pendingFlow ?? null,
-        recentCandidates: context.lastResolvedCandidates ?? [],
-        learnedAliases: context.learnedAliases ?? [],
+      ? {
+          lastCustomer: context.lastCustomerLabel ?? null,
+          lastJob: context.lastJobLabel ?? null,
+          lastIntent: context.lastIntent ?? null,
+          recentTurns: context.recentTurns ?? [],
+          pendingFlow: context.pendingFlow ?? null,
+          recentCandidates: context.lastResolvedCandidates ?? [],
+          learnedAliases: context.learnedAliases ?? [],
         learnedIntentHints: context.learnedIntentHints ?? []
       }
     : null;

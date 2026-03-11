@@ -81,6 +81,17 @@ const toAnalysisFromIntent = (intent: ParsedIntent, normalizedText: string): Par
               totalPence: intent.totalPence
             }
           }
+        : intent.type === "booking_create"
+          ? {
+              intent: "create_booking",
+              entities: {
+                customerName: intent.customerName,
+                customerQuery: intent.customerName,
+                startsAt: intent.startsAt,
+                ...(intent.title ? { title: intent.title } : {}),
+                ...(intent.notes ? { notes: intent.notes } : {})
+              }
+            }
         : intent.type === "payment_add"
           ? {
               intent: "record_payment",
