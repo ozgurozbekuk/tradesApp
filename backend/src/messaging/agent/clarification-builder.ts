@@ -66,6 +66,18 @@ export const buildClarificationQuestion = (input: {
     return "What is the customer name?";
   }
 
+  if (input.intent === "update_customer" && (missing === "customer" || missing === "customerQuery")) {
+    return "Which customer should I update?";
+  }
+
+  if (input.intent === "update_customer" && missing === "phone") {
+    return "What is the new phone number?";
+  }
+
+  if (input.intent === "create_customer" && missing === "phone") {
+    return "What is the customer's phone number?";
+  }
+
   if (input.intent === "create_job" && missing === "customer") {
     return "Customer name is missing. Who should I create the job for?";
   }
@@ -114,6 +126,10 @@ export const buildClarificationQuestion = (input: {
     return "Which customer should I create the invoice for?";
   }
 
+  if (input.intent === "create_invoice" && missing === "job") {
+    return "Which job should I create the invoice for?";
+  }
+
   if (input.intent === "get_customer_account" && (missing === "customer" || missing === "customerQuery")) {
     return "Which customer account should I open?";
   }
@@ -132,6 +148,10 @@ export const buildClarificationQuestion = (input: {
 
   if (input.intent === "export_all_records" && (missing === "customer" || missing === "customerQuery")) {
     return "Which customer records should I export?";
+  }
+
+  if (input.intent === "unknown" && missing === "request") {
+    return "What would you like me to do?";
   }
 
   return `I need the ${formatFieldLabel(missing)} to continue.`;

@@ -111,6 +111,13 @@ const normalizePaymentText = (text: string) => {
     return `PAYMENT customer: ${customer}; amount: ${amount}`;
   }
 
+  const putDownAsPaidPattern = text.match(/^put\s+(.+?)\s+down\s+as\s+paid\s+([£$]?\d+(?:\.\d{1,2})?)$/i);
+  if (putDownAsPaidPattern) {
+    const customer = normalizeWhitespace(putDownAsPaidPattern[1]);
+    const amount = putDownAsPaidPattern[2].replace(/^\$/, "£");
+    return `PAYMENT customer: ${customer}; amount: ${amount}`;
+  }
+
   const paidPattern = text.match(/^(.+?)\s+paid\s+([£$]?\d+(?:\.\d{1,2})?)$/i);
   if (paidPattern) {
     const customer = normalizeWhitespace(paidPattern[1]);
@@ -189,17 +196,20 @@ export const normalizeInboundText = (input: string) => {
     (/(\bjob\b|\btitle\b|\btask\b|\bservice\b)\s*[:=]/i.test(text) ||
       /(\bprice\b|\bcost\b|\bamount\b|\btotal\b)\s*[:=]/i.test(text));
 
-  if (lower.startsWith("new job") || looksLikeCustomerWithJob) {
+  if ((lower.startsWith("new job") && /[:;=]/.test(text)) || looksLikeCustomerWithJob) {
     return normalizeNewJobText(text);
   }
 
-  if (
-    lower.startsWith("payment") ||
-    lower.startsWith("add payment") ||
+  const shouldNormalizePayment =
+    lower.startsWith("payment customer:") ||
+    /^add payment\s+.+/i.test(text) ||
     lower.includes(" paid ") ||
     lower.startsWith("i received ") ||
     /^(?:take|put|add|record|log)\s+[£$]?\d+(?:\.\d{1,2})?\s*(?:cash|bank|card)?\s+off\s+.+\s+account$/i.test(text) ||
-    /^(?:customer\s+)?paid\s+in\s+full\s+[£$]?\d+(?:\.\d{1,2})?\s+.+$/i.test(text)
+    /^(?:customer\s+)?paid\s+in\s+full\s+[£$]?\d+(?:\.\d{1,2})?\s+.+$/i.test(text);
+
+  if (
+    shouldNormalizePayment
   ) {
     return normalizePaymentText(text);
   }

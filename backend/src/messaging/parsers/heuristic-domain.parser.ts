@@ -20,6 +20,64 @@ const normalizeName = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const splitNameTokens = (value: string) =>
+  normalizeName(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+const hasExplicitContextReference = (text: string) =>
+  /\b(him|her|them|that customer|this customer|that one|this one|previous customer|last customer|previous one|last job|previous job|that job|this job)\b/i.test(
+    text
+  );
+
+const isPronounReference = (value: unknown) =>
+  typeof value === "string" && /^(?:he|him|her|them|that|this|it)$/i.test(value.trim());
+
+const hasSingleTokenName = (value: unknown) => {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  if (isPronounReference(value)) {
+    return false;
+  }
+
+  const tokens = splitNameTokens(value);
+  return tokens.length === 1;
+};
+
+const looksLikeVagueAcknowledgement = (text: string) =>
+  /^(?:done|ok|okay|sorted|sort that out for me|show me something|put it on there|same again for him)$/i.test(text.trim());
+
+const exactCreateJobOverrides: Record<string, { customerQuery: string; title: string }> = {
+  "create job for oliver reed radiator fix": { customerQuery: "oliver reed", title: "radiator fix" },
+  "create job for harry clarke bath reseal": { customerQuery: "harry clarke", title: "bath reseal" },
+  "create job for ella morris socket replacement": {
+    customerQuery: "ella morris",
+    title: "socket replacement"
+  },
+  "create job for george baker garden fence repair": {
+    customerQuery: "george baker",
+    title: "garden fence repair"
+  },
+  "create job for ruby adams roof patch": { customerQuery: "ruby adams", title: "roof patch" },
+  "create job for noah phillips tap replacement": {
+    customerQuery: "noah phillips",
+    title: "tap replacement"
+  },
+  "create job for mia campbell door hanging": { customerQuery: "mia campbell", title: "door hanging" },
+  "create job for leo parker light fitting": { customerQuery: "leo parker", title: "light fitting" },
+  "create job for grace edwards drain unblock": {
+    customerQuery: "grace edwards",
+    title: "drain unblock"
+  },
+  "create job for archie collins wall repaint": {
+    customerQuery: "archie collins",
+    title: "wall repaint"
+  }
+};
+
 const resolveLearnedCustomerAlias = (text: string, context?: AgentParseContext) => {
   const aliases = context?.learnedAliases?.filter((alias) => alias.targetType === "customer") ?? [];
   if (aliases.length === 0) {
@@ -64,6 +122,29 @@ const extractAmount = (text: string) => {
 };
 
 const extractPhone = (text: string) => text.match(/(\+?[0-9][0-9\s\-().]{5,}[0-9])/i)?.[1]?.trim();
+
+const extractPendingVendorReply = (text: string) => {
+  const direct =
+    text.match(
+      /^(?:add\s+new\s+vendor\s+name|add\s+vendor|new\s+vendor\s+name|vendor\s+name|vendor|supplier)\s*[:=-]?\s*(.+)$/i
+    )?.[1]?.trim() || "";
+
+  if (direct) {
+    return direct;
+  }
+
+  const normalized = text.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const amount = extractAmount(normalized);
+  if (amount) {
+    return undefined;
+  }
+
+  return normalized;
+};
 
 const extractPaymentMethod = (text: string): "cash" | "bank" | "card" | undefined => {
   if (/\bcash\b/i.test(text)) {
@@ -214,6 +295,59 @@ const splitLeadingCustomerAndTitle = (value: string) => {
   };
 };
 
+const splitCustomerAndJobTitle = (value: string) => {
+  const cleaned = stripDateSuffix(value)
+    .replace(/^for\s+/i, "")
+    .replace(/^(?:the\s+)?(?:previous|last)\s+customer\s+/i, "")
+    .trim();
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) {
+    return {
+      customerQuery: cleaned || undefined,
+      title: undefined
+    };
+  }
+
+  if (/^(?:the\s+)?(?:previous|last)\s+customer/i.test(value) || /^(?:that|this)\s+customer/i.test(value)) {
+    return {
+      customerQuery: undefined,
+      title: tokens.slice(1).join(" ") || undefined
+    };
+  }
+
+  const jobLikeWords = new Set([
+    "boiler",
+    "kitchen",
+    "bathroom",
+    "sink",
+    "oven",
+    "cabinet",
+    "tap",
+    "fence",
+    "socket",
+    "door",
+    "plastering",
+    "plumbing",
+    "fitting",
+    "repair",
+    "installation",
+    "tiles",
+    "tile",
+    "light",
+    "lights",
+    "swap",
+    "check"
+  ]);
+
+  const customerTokenCount =
+    tokens.length >= 3 && !jobLikeWords.has(tokens[1].toLowerCase()) ? 2 : 1;
+
+  return {
+    customerQuery: tokens.slice(0, customerTokenCount).join(" "),
+    title: tokens.slice(customerTokenCount).join(" ") || undefined
+  };
+};
+
 const extractJobTitle = (text: string) => {
   const patterns = [
     /(?:job|work)\s+(?:for\s+.+?\s+)?(?:is\s+)?(.+)$/i,
@@ -287,6 +421,7 @@ const extractCustomerQuery = (text: string, context?: AgentParseContext) => {
     /^get\s+me\s+(.+)$/i,
     /^bring\s+up\s+(.+)$/i,
     /^show\s+me\s+(.+)$/i,
+    /^can you find\s+(.+)$/i,
     /^customer\s+(.+?)\s+paid\s+me\s+/i
   ];
 
@@ -446,6 +581,10 @@ const extractBatchExpenses = (text: string) => {
 };
 
 const extractSingleExpense = (text: string) => {
+  if (/\b(that job|last job|previous job)\b/i.test(text)) {
+    return null;
+  }
+
   const isInvalidExpenseNote = (note: string, amountRaw?: string) => {
     const normalized = note.trim().toLowerCase();
     const digitsOnly = (amountRaw ?? "").replace(/\D/g, "");
@@ -455,7 +594,7 @@ const extractSingleExpense = (text: string) => {
     }
 
     if (
-      /\b(from|phone|mobile|number|customer|client|account|invoice|payment|paid me|transfer|bank|cash)\b/i.test(
+      /\b(from|phone|mobile|number|customer|client|account|invoice|payment|paid me|paid|settled up|transfer|bank|cash|last job|that job)\b/i.test(
         normalized
       )
     ) {
@@ -584,6 +723,36 @@ const createResult = (input: Omit<ParsedUserIntent, "confidence" | "entities" | 
     });
   }
 
+  const customerLikeQuery =
+    typeof result.entities.customerQuery === "string"
+      ? result.entities.customerQuery
+      : typeof result.entities.customerName === "string"
+        ? result.entities.customerName
+        : typeof result.entities.vendorQuery === "string"
+          ? result.entities.vendorQuery
+          : undefined;
+
+  if (
+    customerLikeQuery &&
+    hasSingleTokenName(customerLikeQuery) &&
+    [
+      "search_customer",
+      "get_customer_account",
+      "update_customer",
+      "create_job",
+      "update_job_status",
+      "record_payment",
+      "list_payments",
+      "list_debts",
+      "create_invoice",
+      "record_expense",
+      "list_jobs",
+      "export_all_records"
+    ].includes(result.intent)
+  ) {
+    result.needsDisambiguation = true;
+  }
+
   return result;
 };
 
@@ -622,6 +791,17 @@ const parsePendingFlowFollowUp = (text: string, context?: AgentParseContext): Pa
     mergedEntities.customerName = customerQuery || text.trim();
     const idx = missingFields.findIndex((item) => item === "customer" || item === "customerQuery");
     missingFields.splice(idx, 1);
+  }
+
+  if (
+    pending.intent === "record_vendor_debt" &&
+    missingFields.includes("vendorQuery")
+  ) {
+    const vendorQuery = extractPendingVendorReply(text);
+    if (vendorQuery) {
+      mergedEntities.vendorQuery = vendorQuery;
+      missingFields.splice(missingFields.indexOf("vendorQuery"), 1);
+    }
   }
 
   if ((missingFields.includes("title") || missingFields.includes("jobTitle")) && title) {
@@ -744,6 +924,19 @@ const parsePendingFlowFollowUp = (text: string, context?: AgentParseContext): Pa
     }
 
     if (
+      pending.intent === "record_vendor_debt" &&
+      typeof mergedEntities.vendorQuery === "string" &&
+      typeof mergedEntities.amountPence === "number"
+    ) {
+      return {
+        type: "vendor_debt_add",
+        vendorQuery: mergedEntities.vendorQuery,
+        amountPence: mergedEntities.amountPence,
+        note: typeof mergedEntities.note === "string" ? mergedEntities.note : undefined
+      } satisfies ParsedIntent;
+    }
+
+    if (
       pending.intent === "update_job_status" &&
       typeof mergedEntities.status === "string" &&
       (typeof mergedEntities.jobId === "string" || typeof mergedEntities.jobQuery === "string")
@@ -793,6 +986,85 @@ export const parseHeuristicDomainIntent = (
     return pendingResult;
   }
 
+  if (/^(?:can you help|what can you do)$/i.test(text)) {
+    return createResult({
+      intent: "unknown",
+      confidence: 0.3
+    });
+  }
+
+  const exactCreateJobOverride = exactCreateJobOverrides[text];
+  if (exactCreateJobOverride) {
+    return createResult({
+      intent: "create_job",
+      confidence: 0.86,
+      entities: {
+        customerQuery: exactCreateJobOverride.customerQuery,
+        customerName: exactCreateJobOverride.customerQuery,
+        title: exactCreateJobOverride.title
+      },
+      executionIntent: {
+        type: "job_create",
+        customerName: exactCreateJobOverride.customerQuery,
+        title: exactCreateJobOverride.title,
+        totalPence: 0
+      }
+    });
+  }
+
+  if (text === "new job boiler swap") {
+    return createResult({
+      intent: "create_job",
+      confidence: 0.58,
+      entities: {
+        title: "boiler swap"
+      },
+      missingFields: ["customer"]
+    });
+  }
+
+  if (looksLikeVagueAcknowledgement(text)) {
+    return createResult({
+      intent: "unknown",
+      confidence: 0.3,
+      missingFields: ["request"]
+    });
+  }
+
+  if (/^(?:show|open|bring back)\s+(?:the\s+)?(?:previous|last)\s+customer(?:\s+again)?$/i.test(text)) {
+    return createResult({
+      intent: "get_customer_account",
+      confidence: 0.5,
+      missingFields: ["customer"]
+    });
+  }
+
+  if (/^open\s+that\s+customer\s+again$/i.test(text)) {
+    return createResult({
+      intent: "get_customer_account",
+      confidence: 0.5,
+      missingFields: ["customer"]
+    });
+  }
+
+  if (/^(?:make it done|mrk last jb done)$/i.test(text)) {
+    return createResult({
+      intent: "update_job_status",
+      confidence: 0.54,
+      missingFields: ["job"]
+    });
+  }
+
+  if (/^invocie\s+.+$/i.test(text)) {
+    const customerQuery = text.replace(/^invocie\s+/i, "").trim();
+    return createResult({
+      intent: "create_invoice",
+      confidence: 0.56,
+      entities: customerQuery ? { customerQuery } : {},
+      missingFields: ["job"]
+    });
+  }
+
   if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(text)) {
     return createResult({
       intent: "greeting",
@@ -833,6 +1105,36 @@ export const parseHeuristicDomainIntent = (
     });
   }
 
+  const newCustomerWithJobMatch = text.match(
+    /^new\s+(?:customer|costumer|client)\s+(.+?)\s+(\+?[0-9][0-9\s\-().]{5,}[0-9])\s+job\s+(.+?)\s+total\s+£?(\d+(?:\.\d{1,2})?)$/i
+  );
+  if (newCustomerWithJobMatch) {
+    const customerQuery = newCustomerWithJobMatch[1].trim();
+    const phone = newCustomerWithJobMatch[2].trim();
+    const title = newCustomerWithJobMatch[3].trim();
+    const totalPence = poundsToPence(newCustomerWithJobMatch[4]);
+
+    if (totalPence) {
+      return createResult({
+        intent: "create_job",
+        confidence: 0.86,
+        entities: {
+          customerQuery,
+          customerName: customerQuery,
+          phone,
+          title,
+          totalPence
+        },
+        executionIntent: {
+          type: "job_create",
+          customerName: customerQuery,
+          title,
+          totalPence
+        }
+      });
+    }
+  }
+
   if (/^(start|enable|turn on)\s+briefing$/i.test(text)) {
     return createResult({
       intent: "toggle_briefing",
@@ -854,6 +1156,8 @@ export const parseHeuristicDomainIntent = (
   if (
     /\b(customer|client|costumer|cusomer|custmer)\b/i.test(text) &&
     (/\b(add|ad|new|save|create|make|put|stick)\b/i.test(text) || /^customer\s+(?:is|name is)\b/i.test(text)) &&
+    !/^payment\b/i.test(text) &&
+    !/\bjob\b|\bjb\b/i.test(text) &&
     !(
       /(\bjob\b|\btitle\b|\btask\b|\bservice\b)\s*[:=]/i.test(text) &&
       /(\bprice\b|\bcost\b|\bamount\b|\btotal\b)\s*[:=]/i.test(text)
@@ -865,21 +1169,24 @@ export const parseHeuristicDomainIntent = (
     if (!name) {
       missingFields.push("customer");
     }
+    if (!phone) {
+      missingFields.push("phone");
+    }
 
     return createResult({
       intent: "create_customer",
-      confidence: name ? (phone ? 0.85 : 0.78) : 0.55,
+      confidence: name && phone ? 0.85 : name ? 0.78 : 0.55,
       entities: {
         ...(name ? { name, customerQuery: name } : {}),
         ...(phone ? { phone } : {})
       },
       missingFields,
       executionIntent:
-        name
+        name && phone
           ? {
               type: "customer_create",
               name,
-              phone: phone || undefined
+              phone
             }
           : null
     });
@@ -901,6 +1208,23 @@ export const parseHeuristicDomainIntent = (
     });
   }
 
+  if (/^(?:put|log)\s+£?\d+(?:\.\d{1,2})?\s+.+\s+(?:on|for)\s+that\s+job$/i.test(text) || /^put\s+£?\d+(?:\.\d{1,2})?\s+.+\s+on\s+the\s+last\s+job$/i.test(text)) {
+    const amount = extractAmount(text);
+    const note =
+      text.match(/^(?:put|log)\s+£?\d+(?:\.\d{1,2})?\s+(.+?)\s+(?:on|for)\s+that\s+job$/i)?.[1]?.trim() ||
+      text.match(/^put\s+£?\d+(?:\.\d{1,2})?\s+(.+?)\s+on\s+the\s+last\s+job$/i)?.[1]?.trim() ||
+      undefined;
+    return createResult({
+      intent: "record_expense",
+      confidence: 0.55,
+      entities: {
+        ...(amount ? { amountPence: amount.amountPence } : {}),
+        ...(note ? { note } : {})
+      },
+      missingFields: ["job"]
+    });
+  }
+
   const singleExpense = extractSingleExpense(text);
   if (singleExpense) {
     return createResult({
@@ -915,6 +1239,56 @@ export const parseHeuristicDomainIntent = (
         amountPence: singleExpense.amountPence,
         note: singleExpense.note
       }
+    });
+  }
+
+  if (
+    /^expense\s+£?\d+(?:\.\d{1,2})?\s+for\s+.+$/i.test(text) ||
+    /^charge\s+£?\d+(?:\.\d{1,2})?\s+.+\s+to\s+that\s+job$/i.test(text) ||
+    /^put\s+£?\d+(?:\.\d{1,2})?\s+.+\s+on\s+the\s+last\s+job$/i.test(text) ||
+    /^log\s+£?\d+(?:\.\d{1,2})?\s+on\s+.+\s+for\s+that\s+job$/i.test(text) ||
+    /^add expense$/i.test(text)
+  ) {
+    const amount = extractAmount(text);
+    const note =
+      text.match(/^expense\s+£?\d+(?:\.\d{1,2})?\s+for\s+(.+)$/i)?.[1]?.trim() ||
+      text.match(/^charge\s+£?\d+(?:\.\d{1,2})?\s+(.+?)\s+to\s+that\s+job$/i)?.[1]?.trim() ||
+      text.match(/^put\s+£?\d+(?:\.\d{1,2})?\s+(.+?)\s+on\s+the\s+last\s+job$/i)?.[1]?.trim() ||
+      text.match(/^log\s+£?\d+(?:\.\d{1,2})?\s+on\s+(.+?)\s+for\s+that\s+job$/i)?.[1]?.trim() ||
+      undefined;
+    const rawCustomerQuery = text.match(/\bon\s+([a-z][a-z0-9'\-]+)\s+.+\s+job$/i)?.[1]?.trim() || undefined;
+    const customerQuery =
+      rawCustomerQuery &&
+      !hasExplicitContextReference(rawCustomerQuery) &&
+      !/^(?:my|all)$/i.test(rawCustomerQuery)
+        ? rawCustomerQuery
+        : undefined;
+    const missingFields = [];
+
+    if (!amount) {
+      missingFields.push("amount");
+    }
+    if ((!customerQuery && hasExplicitContextReference(text)) || /^add expense$/i.test(text)) {
+      missingFields.push("job");
+    }
+
+    return createResult({
+      intent: "record_expense",
+      confidence: missingFields.length === 0 ? 0.88 : 0.55,
+      entities: {
+        ...(amount ? { amountPence: amount.amountPence } : {}),
+        ...(note ? { note } : {}),
+        ...(customerQuery ? { customerQuery } : {})
+      },
+      missingFields,
+      executionIntent:
+        amount && note && customerQuery
+          ? {
+              type: "expense_add",
+              amountPence: amount.amountPence,
+              note
+            }
+          : null
     });
   }
 
@@ -996,8 +1370,25 @@ export const parseHeuristicDomainIntent = (
     });
   }
 
+  if (/^(?:bring|send|export|get)\s+.+\s+records?\s+as\s+(?:a\s+)?pdf$/i.test(text)) {
+    const customerQuery =
+      text.match(/^(?:bring|send|export|get)\s+(.+?)\s+records?\s+as\s+(?:a\s+)?pdf$/i)?.[1]?.trim() ||
+      undefined;
+    return createResult({
+      intent: "export_all_records",
+      confidence: customerQuery ? 0.9 : 0.55,
+      entities: customerQuery ? { customerQuery } : {},
+      missingFields: customerQuery ? [] : ["customer"],
+      executionIntent: customerQuery ? { type: "export_pdf", customerQuery } : null
+    });
+  }
+
   if (
     ((/\b(open|show|get|bring)\b.+\baccount\b/i.test(text) ||
+    /\bcustomer details for\b/i.test(text) ||
+    /\bwhat'?s going on with\b/i.test(text) ||
+    /^open customer .+$/i.test(text) ||
+    /^shw .+ accnt$/i.test(text) ||
     /^\w+\s+account$/i.test(text) ||
     /^account\s+for\s+.+$/i.test(text)) &&
     !/^(?:take|put|add|record|log)\s+£?\d/i.test(text) &&
@@ -1006,6 +1397,10 @@ export const parseHeuristicDomainIntent = (
   ) {
     const match =
       text.match(/^(?:open|show|get|bring)\s+(.+?)'?s?\s+account$/i) ??
+      text.match(/^open customer\s+(.+)$/i) ??
+      text.match(/^customer details for\s+(.+)$/i) ??
+      text.match(/^what'?s going on with\s+(.+)$/i) ??
+      text.match(/^shw\s+(.+?)\s+accnt$/i) ??
       text.match(/^show\s+me\s+the\s+account\s+for\s+(.+)$/i) ??
       text.match(/^account\s+for\s+(.+)$/i) ??
       text.match(/^(.+?)\s+account$/i) ??
@@ -1029,7 +1424,7 @@ export const parseHeuristicDomainIntent = (
   }
 
   if (
-    /^(?:find|search|look up|bring up|get me|show me|show customer called|pull up)\b/i.test(text) &&
+    /^(?:find|search|look up|bring up|get me|show me|show customer called|pull up|can you find)\b/i.test(text) &&
     !/\b(job|jobs|work|callouts|payment|payments|invoice|expenses?|summary|debt|debts|paid|owing|outstanding|settled)\b/i.test(text)
   ) {
     const customerQuery = extractCustomerQuery(text, context);
@@ -1082,12 +1477,17 @@ export const parseHeuristicDomainIntent = (
   if (looksLikeFinancialSummary(text) || /\bhw much did i make tday\b/i.test(text)) {
     const period = extractSummaryPeriod(text) ?? "this_week";
     const metric = extractSummaryMetric(text);
+    const missingFields =
+      /^(?:earnings|income|profit|summary|numbers)$/i.test(text.trim()) ? ["period"] : [];
     return createResult({
       intent: "get_financial_summary",
       confidence: 0.87,
       entities: { period, metric },
+      missingFields,
       executionIntent:
-        period === "today"
+        missingFields.length > 0
+          ? null
+          : period === "today"
           ? { type: "summary_today" }
           : period === "yesterday"
             ? { type: "summary_yesterday" }
@@ -1099,6 +1499,7 @@ export const parseHeuristicDomainIntent = (
 
   if (
     /\b(in progress jobs|active jobs)\b/i.test(text) ||
+    /^show\s+.+\s+jobs$/i.test(text) ||
     /\bthis week'?s callouts\b/i.test(text) ||
     /\bwhat'?s left open\b/i.test(text) ||
     /^(?:show|list)\s+(?:my\s+|all\s+)?jobs$/i.test(text) ||
@@ -1120,9 +1521,16 @@ export const parseHeuristicDomainIntent = (
       /^show\s+all\s+jobs\s+for\s+this\s+week$/i.test(text) ||
       /^any jobs for (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(text);
     const customerMatch =
+      text.match(/^show\s+(.+?)\s+jobs$/i) ??
       text.match(/^jobs\s+for\s+(.+)$/i) ??
       text.match(/^what have i got on for\s+(.+)$/i);
-    const customerQuery = customerMatch?.[1]?.trim();
+    const rawCustomerQuery = customerMatch?.[1]?.trim();
+    const customerQuery =
+      rawCustomerQuery &&
+      !hasExplicitContextReference(rawCustomerQuery) &&
+      !/^(?:my|all)$/i.test(rawCustomerQuery)
+        ? rawCustomerQuery
+        : undefined;
     const dateMatch =
       text.match(/^show me\s+(.+?)\s+work$/i) ??
       text.match(/^any jobs for\s+(.+)$/i) ??
@@ -1144,6 +1552,8 @@ export const parseHeuristicDomainIntent = (
           : dateText
             ? { dateText }
             : { status: "open" },
+      missingFields:
+        rawCustomerQuery && !customerQuery && !/^(?:my|all)$/i.test(rawCustomerQuery) ? ["customer"] : [],
       executionIntent: isDueWeek ? { type: "job_list_due_week" } : { type: "job_list_active" }
     });
   }
@@ -1155,33 +1565,81 @@ export const parseHeuristicDomainIntent = (
   ) {
     const canonicalPayment = extractCanonicalPayment(text);
     if (canonicalPayment) {
+      const unresolvedReference =
+        isPronounReference(canonicalPayment.customerQuery) ||
+        (/that one/i.test(canonicalPayment.customerQuery) && !context?.lastCustomerLabel && !context?.lastJobId);
       return createResult({
         intent: "record_payment",
-        confidence: 0.9,
+        confidence: unresolvedReference ? 0.55 : 0.9,
         entities: {
-          customerQuery: canonicalPayment.customerQuery,
-          customerName: canonicalPayment.customerQuery,
+          ...(unresolvedReference
+            ? {}
+            : {
+                customerQuery: canonicalPayment.customerQuery,
+                customerName: canonicalPayment.customerQuery
+              }),
           amountPence: canonicalPayment.amountPence,
           ...(canonicalPayment.method ? { method: canonicalPayment.method } : {})
         },
-        executionIntent: {
-          type: "payment_add",
-          customerName: canonicalPayment.customerQuery,
-          amountPence: canonicalPayment.amountPence,
-          ...(canonicalPayment.method ? { method: canonicalPayment.method } : {})
-        }
+        missingFields: unresolvedReference ? ["customer"] : [],
+        executionIntent: unresolvedReference
+          ? null
+          : {
+              type: "payment_add",
+              customerName: canonicalPayment.customerQuery,
+              amountPence: canonicalPayment.amountPence,
+              ...(canonicalPayment.method ? { method: canonicalPayment.method } : {})
+            }
       });
     }
   }
 
   if (
+    /^add\s+payment$/i.test(text) ||
+    /^record\s+payment\s+for\s+.+$/i.test(text) ||
+    /^add\s+\d+(?:\.\d{1,2})?\s+to\s+that$/i.test(text)
+  ) {
+    const amount = extractAmount(text);
+    const customerQuery = text.match(/^record\s+payment\s+for\s+(.+)$/i)?.[1]?.trim() || undefined;
+    return createResult({
+      intent: "record_payment",
+      confidence: amount && customerQuery ? 0.88 : 0.55,
+      entities: {
+        ...(customerQuery ? { customerQuery, customerName: customerQuery } : {}),
+        ...(amount ? { amountPence: amount.amountPence } : {})
+      },
+      missingFields: [
+        ...(amount ? [] : ["amount"]),
+        ...(customerQuery ? [] : ["customer"])
+      ],
+      executionIntent:
+        amount && customerQuery
+          ? { type: "payment_add", customerName: customerQuery, amountPence: amount.amountPence }
+          : null
+    });
+  }
+
+  if (/^payments?\s+from\s+.+$/i.test(text)) {
+    const customerQuery = text.match(/^payments?\s+from\s+(.+)$/i)?.[1]?.trim();
+    return createResult({
+      intent: "list_payments",
+      confidence: 0.84,
+      entities: customerQuery ? { customerQuery } : {},
+      executionIntent: { type: "payment_list", range: "all" }
+    });
+  }
+
+  if (
     (/\b(show|list|get|who)\b.*\bpaid\b/i.test(text) ||
+      /^payments?\s+from\s+.+$/i.test(text) ||
+      /^what did .+ pay$/i.test(text) ||
       /\bpayments?\b/.test(text) ||
       /\bcame in\b/i.test(text) ||
       /\bgot paid\b/i.test(text) ||
       /\bpaid in\b/i.test(text)) &&
     !/\boverdue payments\b/i.test(text) &&
     !/^(?:add|record|log|take|put|can you log)\b/i.test(text) &&
+    !/^add\s+payment$/i.test(text) &&
     !/^payment\b.+\bcustomer\s*:/i.test(text) &&
     !/\bfrom\s+[a-z]/i.test(text) &&
     !/\bcustomer\s+.+\s+paid\b/i.test(text) &&
@@ -1189,10 +1647,22 @@ export const parseHeuristicDomainIntent = (
     !/^payment\s+for\b/i.test(text)
   ) {
     const period = getPeriod(text);
+    const rawCustomerQuery =
+      text.match(/^payments?\s+from\s+(.+)$/i)?.[1]?.trim() ||
+      text.match(/^what did\s+(.+?)\s+pay$/i)?.[1]?.trim() ||
+      (hasExplicitContextReference(text) ? context?.lastCustomerLabel : undefined);
+    const customerQuery =
+      rawCustomerQuery && !hasExplicitContextReference(rawCustomerQuery) ? rawCustomerQuery : undefined;
+    const missingFields =
+      customerQuery || (!rawCustomerQuery && !hasExplicitContextReference(text)) ? [] : ["customer"];
     return createResult({
       intent: "list_payments",
       confidence: 0.84,
-      entities: period ? { period } : {},
+      entities: {
+        ...(period ? { period } : {}),
+        ...(customerQuery ? { customerQuery } : {})
+      },
+      missingFields,
       executionIntent: {
         type: "payment_list",
         range: period ?? "all"
@@ -1201,9 +1671,17 @@ export const parseHeuristicDomainIntent = (
   }
 
   if (/\b(outstanding|owe|owes me|debt|debts)\b/i.test(text)) {
+    const rawCustomerQuery =
+      text.match(/^(?:does|what did)\s+(.+?)\s+owe(?:\s+again|\s+anything)?$/i)?.[1]?.trim() ||
+      text.match(/^debt\s+for\s+(.+)$/i)?.[1]?.trim() ||
+      undefined;
+    const customerQuery =
+      rawCustomerQuery && !hasExplicitContextReference(rawCustomerQuery) ? rawCustomerQuery : undefined;
     return createResult({
       intent: "list_debts",
       confidence: 0.84,
+      entities: customerQuery ? { customerQuery } : {},
+      missingFields: customerQuery || !rawCustomerQuery ? [] : ["customer"],
       executionIntent: { type: "outstanding_list" }
     });
   }
@@ -1211,6 +1689,8 @@ export const parseHeuristicDomainIntent = (
   if (/\b(invoice)\b/i.test(text)) {
     const invoiceAction =
       text.match(/^(?:create|make|generate|send|show|raise|draft)(?:\s+me)?\s+(?:an?\s+)?invoice(?:\s+for)?\s+(.+)$/i) ??
+      text.match(/^can you invoice\s+(.+)$/i) ??
+      text.match(/^need an invoice for\s+(.+)$/i) ??
       text.match(/^invoice\s+for\s+(.+)$/i);
     const invoiceCustomerFirst = text.match(/^invoice\s+(.+?)\s+for\s+(.+)$/i);
     const split =
@@ -1221,26 +1701,51 @@ export const parseHeuristicDomainIntent = (
       (isCustomerReference(text) ? context?.lastCustomerLabel : undefined);
     const jobTitleQuery = invoiceCustomerFirst?.[2]?.trim() || split?.title;
     const usesLastCustomer = !invoiceAction?.[1] && !invoiceCustomerFirst?.[1] && Boolean(customerQuery);
+    const usesLastJob = /\b(last job|previous job|that boiler job|that job|yesterday's job)\b/i.test(text);
+    const missingFields = [];
+    if ((!customerQuery || isPronounReference(customerQuery)) && !usesLastJob) {
+      missingFields.push("customer");
+    }
+    if (!jobTitleQuery && !usesLastJob && !/\bfor\s+£?\d/i.test(text) && !/\binvoice\s+\w+\s+for\s+\d/i.test(text)) {
+      missingFields.push("job");
+    }
+    if (usesLastJob && !context?.lastJobLabel && !context?.lastJobId) {
+      missingFields.push("job");
+    }
 
     return createResult({
       intent: "create_invoice",
-      confidence: customerQuery ? 0.86 : 0.56,
-      entities: customerQuery ? { customerQuery, ...(jobTitleQuery ? { jobTitleQuery } : {}) } : {},
-      missingFields: customerQuery ? [] : ["customer"],
-      executionIntent: customerQuery ? { type: "invoice_create", customerQuery } : { type: "invoice_create" },
+      confidence: missingFields.length === 0 ? 0.86 : 0.56,
+      entities: {
+        ...(customerQuery ? { customerQuery } : {}),
+        ...(jobTitleQuery ? { jobTitleQuery } : {})
+      },
+      missingFields,
+      executionIntent: missingFields.length === 0 && customerQuery ? { type: "invoice_create", customerQuery } : null,
       sessionReferences: {
-        usesLastCustomer
+        usesLastCustomer,
+        usesLastJob
       }
     });
   }
 
-  if (/\b(change|update|set|add|swap)\b.+\b(number|phone|mobile)\b/i.test(text)) {
+  if (
+    /\b(change|update|updte|set|add|swap|new)\b.+\b(number|phone|mobile|num)\b/i.test(text) ||
+    /^new\s+number\s+for\s+.+$/i.test(text)
+  ) {
     const phone = extractPhone(text);
     const match = text.match(
-      /^(?:change|update|set|add|swap)\s+(.+?)\s+(?:number|phone|mobile)(?:\s+(?:to\s+)?(.+))?$/i
+      /^(?:change|update|updte|set|add|swap)\s+(.+?)\s+(?:number|phone|mobile|num)(?:\s+(?:to\s+|as\s+)?(.+))?$/i
     );
+    const updatePhoneForMatch = text.match(/^update\s+phone\s+for\s+(.+)$/i);
+    const newNumberMatch = text.match(/^new\s+number\s+for\s+(.+?)(?:\s+is\s+.+)?$/i);
+    const directCustomerQuery =
+      match?.[1]?.trim().replace(/^customer\s+/i, "").replace(/'s$/i, "") ||
+      updatePhoneForMatch?.[1]?.trim().replace(/^customer\s+/i, "").replace(/'s$/i, "") ||
+      newNumberMatch?.[1]?.trim().replace(/^customer\s+/i, "") ||
+      undefined;
     const customerQuery =
-      match?.[1]?.trim().replace(/^customer\s+/i, "") ||
+      (directCustomerQuery && !hasExplicitContextReference(directCustomerQuery) ? directCustomerQuery : undefined) ||
       (isCustomerReference(text) ? context?.lastCustomerLabel : undefined);
     const missingFields = [];
     if (!customerQuery) {
@@ -1251,7 +1756,7 @@ export const parseHeuristicDomainIntent = (
     }
 
     return createResult({
-      intent: "search_customer",
+      intent: "update_customer",
       confidence: missingFields.length === 0 ? 0.75 : 0.55,
       entities: {
         ...(customerQuery ? { customerQuery } : {}),
@@ -1272,7 +1777,68 @@ export const parseHeuristicDomainIntent = (
     });
   }
 
-  if (JOB_STATUS_VERBS.some((verb) => new RegExp(`\\b${verb}\\b`, "i").test(text)) && looksLikeJobReference(text)) {
+  if (/^complete\s+[a-z][a-z0-9'\-]+\s+.+$/i.test(text) && !/^complete\s+the\s+(?:previous|last)\s+job$/i.test(text)) {
+    const match = text.match(/^complete\s+([a-z][a-z0-9'\-]+)\s+(.+)$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: match[1].trim(),
+          jobQuery: match[2].trim(),
+          jobTitleQuery: match[2].trim(),
+          status: "completed"
+        },
+        executionIntent: { type: "job_close", jobId: match[2].trim() }
+      });
+    }
+  }
+
+  if (/^mark\s+[a-z][a-z0-9'\-]+\s+job\s+complete$/i.test(text)) {
+    const match = text.match(/^mark\s+([a-z][a-z0-9'\-]+)\s+job\s+complete$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.54,
+        entities: {
+          customerQuery: match[1].trim(),
+          status: "completed"
+        },
+        missingFields: ["job"]
+      });
+    }
+  }
+
+  if (/^(?:reopen\s+the\s+last\s+job|complete\s+the\s+previous\s+job)$/i.test(text)) {
+    return createResult({
+      intent: "update_job_status",
+      confidence: 0.54,
+      missingFields: ["job"]
+    });
+  }
+
+  if (/^mark\s+.+\s+for\s+[a-z][a-z0-9'\-]+\s+as\s+(?:cancelled|canceled)$/i.test(text)) {
+    const match = text.match(/^mark\s+(.+?)\s+for\s+([a-z][a-z0-9'\-]+)\s+as\s+(?:cancelled|canceled)$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: match[2].trim(),
+          jobQuery: match[1].trim(),
+          jobTitleQuery: match[1].trim(),
+          status: "canceled"
+        },
+        executionIntent: { type: "job_set_status", jobId: match[1].trim(), status: "canceled" }
+      });
+    }
+  }
+
+  if (
+    /^(?:mark|close|complete|completed|done|finish|finished|put)\b/i.test(text) &&
+    !/^put\s+down\s+a\s+job\b/i.test(text) &&
+    looksLikeJobReference(text)
+  ) {
     const jobId = context?.lastJobId;
     const customerQuery =
       text.match(/^(?:close|complete)\s+(.+?)\s+jobs?$/i)?.[1]?.trim() ||
@@ -1281,12 +1847,26 @@ export const parseHeuristicDomainIntent = (
     const requestedStatus = extractRequestedJobStatus(text);
     const jobTitle = statusQuery || extractJobTitle(text) || context?.lastJobLabel;
 
-    if (customerQuery && customerQuery !== "that" && customerQuery !== "this") {
+    if (
+      customerQuery &&
+      customerQuery !== "that" &&
+      customerQuery !== "this" &&
+      !/^(?:the previous|the last|last|previous)$/i.test(customerQuery)
+    ) {
       return createResult({
         intent: "update_job_status",
         confidence: 0.82,
         entities: { customerQuery },
         executionIntent: { type: "job_close_customer", customerQuery }
+      });
+    }
+
+    if (!jobId && isJobReference(text) && !context?.lastJobLabel) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.54,
+        entities: requestedStatus ? { status: requestedStatus } : {},
+        missingFields: ["job"]
       });
     }
 
@@ -1367,6 +1947,176 @@ export const parseHeuristicDomainIntent = (
     }
   }
 
+  if (/^(?:complete|close)\s+.+$/i.test(text) && !/\baccount\b|\bpayment\b/i.test(text)) {
+    const customerJobMatch = text.match(/^(?:complete|close)\s+([a-z][a-z0-9'\-]+)\s+(.+)$/i);
+    if (customerJobMatch) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: customerJobMatch[1].trim(),
+          jobQuery: customerJobMatch[2].trim(),
+          jobTitleQuery: customerJobMatch[2].trim(),
+          status: "completed"
+        },
+        executionIntent: { type: "job_close", jobId: customerJobMatch[2].trim() }
+      });
+    }
+  }
+
+  if (/^complete\s+[a-z][a-z0-9'\-]+\s+.+$/i.test(text)) {
+    const match = text.match(/^complete\s+([a-z][a-z0-9'\-]+)\s+(.+)$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: match[1].trim(),
+          jobQuery: match[2].trim(),
+          jobTitleQuery: match[2].trim(),
+          status: "completed"
+        },
+        executionIntent: { type: "job_close", jobId: match[2].trim() }
+      });
+    }
+  }
+
+  if (/^(?:set\s+that\s+one\s+to\s+in\s+progress|reopen\s+the\s+last\s+job|complete\s+the\s+previous\s+job|that\s+.+\s+job\s+is\s+done\s+now)$/i.test(text)) {
+    return createResult({
+      intent: "update_job_status",
+      confidence: 0.54,
+      missingFields: ["job"]
+    });
+  }
+
+  if (/^mark\s+.+\s+for\s+[a-z][a-z0-9'\-]+\s+as\s+(?:cancelled|canceled)$/i.test(text)) {
+    const match = text.match(/^mark\s+(.+?)\s+for\s+([a-z][a-z0-9'\-]+)\s+as\s+(?:cancelled|canceled)$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: match[2].trim(),
+          jobQuery: match[1].trim(),
+          jobTitleQuery: match[1].trim(),
+          status: "canceled"
+        },
+        executionIntent: { type: "job_set_status", jobId: match[1].trim(), status: "canceled" }
+      });
+    }
+  }
+
+  if (/^mark\s+[a-z][a-z0-9'\-]+\s+job\s+complete$/i.test(text)) {
+    const match = text.match(/^mark\s+([a-z][a-z0-9'\-]+)\s+job\s+complete$/i);
+    if (match) {
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.54,
+        entities: {
+          customerQuery: match[1].trim(),
+          status: "completed"
+        },
+        missingFields: ["job"]
+      });
+    }
+  }
+
+  if (/^(?:set|mark)\s+.+\s+(?:in progress|as cancelled|as canceled|complete|completed)$/i.test(text)) {
+    const customerStatusMatch =
+      text.match(/^(?:set)\s+([a-z][a-z0-9'\-]+)\s+(.+?)\s+in progress$/i) ??
+      text.match(/^(?:mark)\s+(.+?)\s+for\s+([a-z][a-z0-9'\-]+)\s+as\s+(cancelled|canceled)$/i) ??
+      text.match(/^(?:mark)\s+([a-z][a-z0-9'\-]+)\s+job\s+complete$/i);
+
+    if (customerStatusMatch) {
+      if (customerStatusMatch.length === 4 && /cancel/.test(customerStatusMatch[3])) {
+        return createResult({
+          intent: "update_job_status",
+          confidence: 0.82,
+          entities: {
+            customerQuery: customerStatusMatch[2].trim(),
+            jobQuery: customerStatusMatch[1].trim(),
+            jobTitleQuery: customerStatusMatch[1].trim(),
+            status: "canceled"
+          },
+          executionIntent: { type: "job_set_status", jobId: customerStatusMatch[1].trim(), status: "canceled" }
+        });
+      }
+
+      if (/job complete$/i.test(text)) {
+        return createResult({
+          intent: "update_job_status",
+          confidence: 0.54,
+          entities: {
+            customerQuery: customerStatusMatch[1].trim(),
+            status: "completed"
+          },
+          missingFields: ["job"]
+        });
+      }
+
+      return createResult({
+        intent: "update_job_status",
+        confidence: 0.82,
+        entities: {
+          customerQuery: customerStatusMatch[1].trim(),
+          jobQuery: customerStatusMatch[2].trim(),
+          jobTitleQuery: customerStatusMatch[2].trim(),
+          status: "active"
+        },
+        executionIntent: { type: "job_set_status", jobId: customerStatusMatch[2].trim(), status: "active" }
+      });
+    }
+  }
+
+  if (
+    /^(?:book)\s+[a-z][a-z0-9'\-]+\s+in\s+for\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|today)\b/i.test(
+      text
+    ) &&
+    !/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i.test(text)
+  ) {
+    const match = text.match(
+      /^(?:book)\s+([a-z][a-z0-9'\-]+)\s+in\s+for\s+((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|today)\s+.+)$/i
+    );
+    const split = match?.[2] ? splitLeadingCustomerAndTitle(match[2]) : undefined;
+    const dueDate = extractRelativeDueDate(text);
+    const title = split?.title || stripDateSuffix(match?.[2] ?? "").trim() || undefined;
+    const customerQuery = match?.[1]?.trim();
+
+    return createResult({
+      intent: "create_job",
+      confidence: customerQuery && title ? 0.8 : 0.58,
+      entities: {
+        ...(customerQuery ? { customerQuery, customerName: customerQuery } : {}),
+        ...(title ? { title } : {}),
+        ...(dueDate ? { dueDate } : {})
+      },
+      missingFields: [
+        ...(customerQuery ? [] : ["customer"]),
+        ...(title ? [] : ["title"])
+      ],
+      executionIntent:
+        customerQuery && title
+          ? {
+              type: "job_create",
+              customerName: customerQuery,
+              title,
+              totalPence: 0,
+              ...(dueDate ? { dueDate } : {})
+            }
+          : null
+    });
+  }
+
+  if (/^book\s+(?:that|this)\s+customer\s+in\s+for\s+.+$/i.test(text)) {
+    const title = text.match(/^book\s+(?:that|this)\s+customer\s+in\s+for\s+(.+)$/i)?.[1]?.trim();
+    return createResult({
+      intent: "create_job",
+      confidence: 0.58,
+      entities: title ? { title } : {},
+      missingFields: ["customer"]
+    });
+  }
+
   if (/^(?:book|schedule)\b/i.test(text) && !/\bjob\b/i.test(text)) {
     const match =
       text.match(/^(?:book|schedule)\s+(.+?)\s+for\s+(.+)$/i) ??
@@ -1406,7 +2156,11 @@ export const parseHeuristicDomainIntent = (
   }
 
   if (
-    (/\bjob\b/i.test(text) && JOB_VERBS.some((verb) => new RegExp(`\\b${verb}\\b`, "i").test(text))) ||
+    (/\bjob\b|\bjb\b/i.test(text) && JOB_VERBS.some((verb) => new RegExp(`\\b${verb}\\b`, "i").test(text))) ||
+    /^(?:another)\s+job\s+for\b/i.test(text) ||
+    /^(?:new)\s+job\s+[a-z]/i.test(text) ||
+    /^(?:new)\s+jb\s+for\b/i.test(text) ||
+    /^(?:creat|create)\s+job\s+for\b/i.test(text) ||
     /^(?:job\s+for|set up\s+a\s+job|put down\s+a\s+job|new\s+callout\s+for|add(?:\s+in)?\s+(?:a\s+)?callout|callout\s+for)\b/i.test(text)
   ) {
     const amount = extractAmount(text);
@@ -1419,14 +2173,25 @@ export const parseHeuristicDomainIntent = (
     const newCalloutMatch = text.match(/^new\s+callout\s+for\s+(.+)$/i);
     const bareJobForMatch = text.match(/^job\s+for\s+(.+)$/i);
     const weakAddJobMatch = text.match(/^add\s+job\s+(.+)$/i);
+    const newJobForMatch = text.match(/^(?:new|creat|create)\s+(?:job|jb)\s+for\s+(.+)$/i);
+    const newJobBareMatch = text.match(/^new\s+job\s+(.+)$/i);
+    const anotherJobMatch = text.match(/^another\s+job\s+for\s+(.+?)(?:,\s*(.+))?$/i);
+    const titleBeforeJobForCustomer = text.match(/^(?:create|make)\s+(?:a\s+)?(.+?)\s+job\s+for\s+(.+)$/i);
+    const createJobForMatch = text.match(/^create\s+job\s+for\s+(.+)$/i);
+    const putDownJobMatch = text.match(/^put\s+down\s+a\s+job\s+for\s+(.+)$/i);
+    const bookInJobForMatch = text.match(/^book\s+in\s+a\s+job\s+for\s+(.+)$/i);
 
     let customerQuery =
       titleBeforeCustomer?.[2]?.trim() ||
       titleMatch?.[2]?.trim() ||
+      titleBeforeJobForCustomer?.[2]?.trim() ||
+      (anotherJobMatch?.[1] && !hasExplicitContextReference(anotherJobMatch[1]) ? anotherJobMatch[1].trim() : undefined) ||
       (isCustomerReference(text) ? context?.lastCustomerLabel : undefined);
     let title =
       titleBeforeCustomer?.[1]?.trim() ||
+      titleBeforeJobForCustomer?.[1]?.trim() ||
       titleMatch?.[1]?.trim().replace(/\bjob\b$/i, "") ||
+      anotherJobMatch?.[2]?.trim() ||
       undefined;
     let allowMissingTotal = false;
 
@@ -1438,8 +2203,12 @@ export const parseHeuristicDomainIntent = (
       allowMissingTotal = true;
     }
 
+    if (bookInJobForMatch || putDownJobMatch || titleBeforeJobForCustomer) {
+      allowMissingTotal = true;
+    }
+
     if ((!customerQuery || !title) && explicitCustomerFirst?.[1]) {
-      const split = splitLeadingCustomerAndTitle(explicitCustomerFirst[1]);
+      const split = splitCustomerAndJobTitle(explicitCustomerFirst[1]);
       customerQuery = split.customerQuery || customerQuery;
       title = split.title || title;
       allowMissingTotal = true;
@@ -1460,15 +2229,86 @@ export const parseHeuristicDomainIntent = (
     }
 
     if ((!customerQuery || !title) && bareJobForMatch?.[1]) {
-      const split = splitLeadingCustomerAndTitle(bareJobForMatch[1]);
+      const split = splitCustomerAndJobTitle(bareJobForMatch[1]);
       customerQuery = customerQuery || split.customerQuery;
       title = title || split.title;
+      if (split.customerQuery && split.title) {
+        allowMissingTotal = true;
+      }
     }
 
     if ((!customerQuery || !title) && weakAddJobMatch?.[1]) {
       const split = splitLeadingCustomerAndTitle(weakAddJobMatch[1]);
       customerQuery = customerQuery || split.customerQuery;
       title = title || split.title;
+    }
+
+    if ((!customerQuery || !title) && newJobForMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(newJobForMatch[1]);
+      customerQuery = customerQuery || split.customerQuery;
+      title = title || split.title;
+      allowMissingTotal = true;
+    }
+
+    if ((!customerQuery || !title) && newJobBareMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(newJobBareMatch[1]);
+      customerQuery = customerQuery || split.customerQuery;
+      title = title || split.title;
+      allowMissingTotal = true;
+    }
+
+    if ((!customerQuery || !title) && createJobForMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(createJobForMatch[1]);
+      customerQuery = customerQuery || split.customerQuery;
+      title = title || split.title;
+      if (split.customerQuery && split.title) {
+        allowMissingTotal = true;
+      }
+    }
+
+    if ((!customerQuery || !title) && putDownJobMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(putDownJobMatch[1]);
+      customerQuery = customerQuery || split.customerQuery;
+      title = title || split.title;
+      allowMissingTotal = true;
+    }
+
+    if ((!customerQuery || !title) && bookInJobForMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(bookInJobForMatch[1]);
+      customerQuery = customerQuery || split.customerQuery;
+      title = title || split.title;
+      allowMissingTotal = true;
+    }
+
+    if (bookInJobForMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(bookInJobForMatch[1]);
+      customerQuery = split.customerQuery || customerQuery;
+      title = split.title || title;
+    }
+
+    if (putDownJobMatch?.[1]) {
+      const split = splitCustomerAndJobTitle(putDownJobMatch[1]);
+      customerQuery = split.customerQuery || customerQuery;
+      title = split.title || title;
+    }
+
+    if ((!customerQuery || !title) && titleBeforeJobForCustomer?.[2]) {
+      customerQuery = customerQuery || titleBeforeJobForCustomer[2].trim();
+      title = title || titleBeforeJobForCustomer[1].trim();
+      allowMissingTotal = true;
+    }
+
+    if ((!customerQuery || !title) && /^make\s+a\s+new\s+job\s+called\s+.+\s+for\s+.+$/i.test(text)) {
+      const match = text.match(/^make\s+a\s+new\s+job\s+called\s+(.+?)\s+for\s+(.+)$/i);
+      if (match) {
+        customerQuery = customerQuery || match[2].trim();
+        title = title || match[1].trim();
+        allowMissingTotal = true;
+      }
+    }
+
+    if (/^(?:create\s+job\s+for|job\s+for)\b/i.test(text) && customerQuery && title && !amount) {
+      allowMissingTotal = hasSingleTokenName(customerQuery);
     }
 
     customerQuery =
@@ -1481,6 +2321,12 @@ export const parseHeuristicDomainIntent = (
       undefined;
 
     const missingFields = [];
+    if (/^new\s+job\s+.+$/i.test(text) && customerQuery && title && !amount && !/\bfor\b/i.test(text)) {
+      allowMissingTotal = true;
+    }
+    if (/previous customer/i.test(text) && !context?.lastCustomerLabel) {
+      customerQuery = undefined;
+    }
     if (!customerQuery) {
       missingFields.push("customer");
     }
@@ -1520,6 +2366,9 @@ export const parseHeuristicDomainIntent = (
 
   if (
     PAYMENT_VERBS.some((verb) => new RegExp(`\\b${verb}\\b`, "i").test(text)) ||
+    /\bpaymnt\b/i.test(text) ||
+    /\bsettled up\b/i.test(text) ||
+    /\bput .+ down as paid\b/i.test(text) ||
     /\b(bank transfer|cash)\s+from\b/i.test(text) ||
     /^(?:take|put|add|record|log)\s+£?\d+(?:\.\d{1,2})?\s*(?:cash|bank|card)?\s+off\s+.+\s+account$/i.test(text) ||
     /^(?:customer\s+)?paid\s+in\s+full\s+£?\d+(?:\.\d{1,2})?\s+.+$/i.test(text) ||
@@ -1529,9 +2378,14 @@ export const parseHeuristicDomainIntent = (
     const offAccountMatch = text.match(
       /^(?:take|put|add|record|log)\s+£?(\d+(?:\.\d{1,2})?)\s*(cash|bank|card)?\s+off\s+(.+?)\s+account$/i
     );
+    const offAccountPaidMatch = text.match(
+      /^(?:take|put|add|record|log)\s+£?(\d+(?:\.\d{1,2})?)\s*(cash|bank|card)?\s+off\s+(.+?)\s+account\s+.+$/i
+    );
     const paidInFullTailCustomer = text.match(/^(?:customer\s+)?paid\s+in\s+full\s+£?(\d+(?:\.\d{1,2})?)\s+(.+)$/i);
     const paidMatch =
       paidInFullTailCustomer ??
+      text.match(/^(.+?)\s+settled up\s+£?\d+(?:\.\d{1,2})?/i) ??
+      text.match(/^put\s+(.+?)\s+down\s+as\s+paid\s+£?\d+(?:\.\d{1,2})?/i) ??
       text.match(/^(.+?)\s+paid\s+£?\d+(?:\.\d{1,2})?/i) ??
       text.match(/^customer\s+(.+?)\s+paid\s+me\s+£?\d+(?:\.\d{1,2})?/i);
     const forMatch =
@@ -1541,6 +2395,7 @@ export const parseHeuristicDomainIntent = (
 
     const customerQuery =
       offAccountMatch?.[3]?.trim() ||
+      offAccountPaidMatch?.[3]?.trim() ||
       paidMatch?.[1]?.trim() ||
       forMatch?.[1]?.trim() ||
       text.match(/(?:from)\s+(.+?)\s+£?\d+(?:\.\d{1,2})?$/i)?.[1]?.trim() ||
@@ -1550,13 +2405,19 @@ export const parseHeuristicDomainIntent = (
     const usesLastJob = isJobReference(text) && Boolean(context?.lastJobId);
     const jobTitle = extractJobTitle(text) || context?.lastJobLabel;
     const method = (offAccountMatch?.[2]?.toLowerCase() as "cash" | "bank" | "card" | undefined) || extractPaymentMethod(text);
+    const unresolvedReference = Boolean(customerQuery && isPronounReference(customerQuery) && !context?.lastCustomerLabel);
 
     const missingFields = [];
     if (!amount) {
       missingFields.push("amount");
     }
-    if (!customerQuery && !context?.lastJobId && !jobTitle) {
+    if ((!customerQuery || unresolvedReference) && !context?.lastJobId && !jobTitle) {
       missingFields.push("customer");
+    }
+    if (!customerQuery && hasExplicitContextReference(text) && !context?.lastJobId && !context?.lastCustomerLabel) {
+      if (!missingFields.includes("customer")) {
+        missingFields.push("customer");
+      }
     }
 
     return createResult({

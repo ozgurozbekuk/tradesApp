@@ -85,6 +85,69 @@ test("pending update_job_status follow-up normalizes common completed typos", as
   });
 });
 
+test("pending vendor debt follow-up accepts a short vendor reply", async () => {
+  const parseHeuristicDomainIntent = await loadParser();
+
+  const result = parseHeuristicDomainIntent("tool market", {
+    pendingFlow: {
+      intent: "record_vendor_debt",
+      entities: {
+        amountPence: 40000,
+        note: "painting tools"
+      },
+      missingFields: ["vendorQuery"],
+      followUpQuestion: "Which vendor should I add the debt to?"
+    }
+  });
+
+  assert.ok(result);
+  assert.equal(result?.intent, "record_vendor_debt");
+  assert.deepEqual(result?.missingFields, []);
+  assert.deepEqual(result?.entities, {
+    amountPence: 40000,
+    note: "painting tools",
+    vendorQuery: "tool market"
+  });
+  assert.deepEqual(result?.executionIntent, {
+    type: "vendor_debt_add",
+    vendorQuery: "tool market",
+    amountPence: 40000,
+    note: "painting tools"
+  });
+  assert.equal(result?.sessionReferences?.usesPendingFlow, true);
+});
+
+test("pending vendor debt follow-up keeps vendor-labelled replies in the debt flow", async () => {
+  const parseHeuristicDomainIntent = await loadParser();
+
+  const result = parseHeuristicDomainIntent("add new vendor name: tool market", {
+    pendingFlow: {
+      intent: "record_vendor_debt",
+      entities: {
+        amountPence: 40000,
+        note: "painting tools"
+      },
+      missingFields: ["vendorQuery"],
+      followUpQuestion: "Which vendor should I add the debt to?"
+    }
+  });
+
+  assert.ok(result);
+  assert.equal(result?.intent, "record_vendor_debt");
+  assert.deepEqual(result?.missingFields, []);
+  assert.deepEqual(result?.entities, {
+    amountPence: 40000,
+    note: "painting tools",
+    vendorQuery: "tool market"
+  });
+  assert.deepEqual(result?.executionIntent, {
+    type: "vendor_debt_add",
+    vendorQuery: "tool market",
+    amountPence: 40000,
+    note: "painting tools"
+  });
+});
+
 test("heuristic parser understands simple booking messages", async () => {
   const parseHeuristicDomainIntent = await loadParser();
 

@@ -2,6 +2,7 @@ import type { ParsedIntent } from "../intents/schemas";
 
 export type AgentIntentName =
   | "create_customer"
+  | "update_customer"
   | "search_customer"
   | "get_customer_account"
   | "create_job"

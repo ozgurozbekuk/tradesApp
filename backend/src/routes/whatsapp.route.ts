@@ -101,6 +101,10 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       messageSid
     });
 
+    if (!routed.reply.trim()) {
+      return res.status(200).json({ status: "ok", suppressed: true });
+    }
+
     conversationMemory.appendTurn(phone, {
       role: "user",
       text: body

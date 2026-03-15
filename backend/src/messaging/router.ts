@@ -29,10 +29,11 @@ import { AgentLearningService } from "../services/agent-learning.service";
 import { selectAgentFlow } from "./agent-first/flow-selector";
 import { env } from "../config/env";
 import { buildPlanTodayToolExecutor } from "./agent-first/agent-first-runtime";
-import { interpretWithSemanticAgent, PLAN_TODAY_PATTERN } from "./semantic-agent/interpreter";
+import { interpretWithSemanticAgent } from "./semantic-agent/interpreter";
 import { resolveSemanticCapability } from "./semantic-agent/runtime";
 import { buildSemanticClarification } from "./semantic-agent/clarification";
 import { manageDialogTurn } from "./dialog-manager";
+import { tryResolvePriorityPendingVendorDebtFollowUp } from "./pending-flow-priority";
 
 export type IncomingMessage = {
   from: string;
@@ -44,6 +45,10 @@ export type RoutedMessage = {
   reply: string;
   mediaUrl?: string;
 };
+
+const UNREGISTERED_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const UNREGISTERED_REPLY_MAX_COUNT = 3;
+const unregisteredReplyCounters = new Map<string, { count: number; resetAt: number }>();
 
 const usersService = new UsersService();
 const jobsService = new JobsService();
@@ -139,6 +144,28 @@ const compactDate = (value: Date | null) => {
   return value.toISOString().slice(0, 10);
 };
 
+const buildRegistrationReply = () => adminReply(`Please register on the website first: ${env.BASE_URL}`);
+
+const shouldReplyToUnregisteredPhone = (phone: string) => {
+  const now = Date.now();
+  const existing = unregisteredReplyCounters.get(phone);
+
+  if (!existing || existing.resetAt <= now) {
+    unregisteredReplyCounters.set(phone, {
+      count: 1,
+      resetAt: now + UNREGISTERED_REPLY_WINDOW_MS
+    });
+    return true;
+  }
+
+  if (existing.count >= UNREGISTERED_REPLY_MAX_COUNT) {
+    return false;
+  }
+
+  existing.count += 1;
+  return true;
+};
+
 const buildPaymentFollowUpDraft = (input: {
   customerName?: string;
   outstandingPence: number;
@@ -177,9 +204,6 @@ const EXPLICIT_ALL_RECORDS_PATTERN =
   /\b(all records|all customers|full records|everything|entire database|all data)\b/i;
 const FOLLOW_UP_CUSTOMER_PDF_PATTERN =
   /\b(as pdf|pdf|as a pdf|same customer|that customer|this customer|that one|this one)\b/i;
-const ONBOARDING_COMMAND_LIKE_PATTERN =
-  /^(?:new job|payment|add payment|find|close|summary|export|help|subscribe|yes|confirm|cancel|stop|start|business|my business|i paid|debt|bring|send|get)\b/i;
-
 const extractCustomerQueryFromPdfMessage = (normalizedText: string) => {
   const namedRecordsMatch = normalizedText.match(
     /^(?:bring|send|export|get)\s+(.+?)\s+records(?:\s+as\s+(?:a\s+)?pdf)?$/i
@@ -235,19 +259,6 @@ const resolvePdfCustomerQuery = (input: {
 
   const ctx = conversationMemory.get(input.phone);
   return ctx.lastCustomerName?.trim() || undefined;
-};
-
-const looksLikeBusinessName = (text: string) => {
-  const value = text.trim();
-  if (value.length < 2) {
-    return false;
-  }
-
-  if (!/[a-z]/i.test(value)) {
-    return false;
-  }
-
-  return !ONBOARDING_COMMAND_LIKE_PATTERN.test(value);
 };
 
 const PHONE_VALUE_PATTERN = /(\+?[0-9][0-9\s\-().]{5,}[0-9])/;
@@ -1887,52 +1898,17 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     return { reply: adminReply("Please send a message and I will help.") };
   }
 
-  if (/^(?:my\s+business|business)\s*[:=-]?\s*$/i.test(body)) {
-    return {
-      reply: adminReply("Please send your business name.", "Example: BUSINESS Ozgur Plumbing")
-    };
-  }
-
-  const onboardingPatterns = [
-    /^(?:my\s+business|business)\s*[:=-]?\s*(.+)$/i,
-    /^(?:my\s+)?business\s+name\s+is\s+(.+)$/i,
-    /^register\s+(?:my\s+)?business\s*[:=-]?\s*(.+)$/i,
-    /^my\s+business\s+is\s+(.+)$/i
-  ];
-  const onboardingMatch = onboardingPatterns
-    .map((pattern) => body.match(pattern))
-    .find((match): match is RegExpMatchArray => Boolean(match));
-
-  if (onboardingMatch) {
-    const businessName = onboardingMatch[1]?.trim();
-    if (!businessName) {
-      return {
-        reply: adminReply("Please send your business name.", "Example: BUSINESS Ozgur Plumbing")
-      };
-    }
-
-    const existingUser = await usersService.findByPhone(message.from);
-    if (existingUser) {
-      return {
-        reply: adminReply(`You are already registered as ${existingUser.businessName}.`)
-      };
-    }
-
-    await usersService.createWithBusinessName({
-      phone: message.from,
-      businessName
-    });
-
-    return {
-      reply: adminReply("Welcome. Your assistant is ready.", "Send NEW JOB to log your first job.")
-    };
-  }
-
   const user = await usersService.findByPhone(message.from);
+  if (!user) {
+    return shouldReplyToUnregisteredPhone(message.from)
+      ? { reply: buildRegistrationReply() }
+      : { reply: "" };
+  }
+
   const previousParseDecision = conversationMemory.getLastParseDecision(message.from);
   let parseContext = mergeParseContexts(
     conversationMemory.getAgentParseContext(message.from),
-    user ? await agentLearningService.getLearnedParseContext(user.id) : {}
+    await agentLearningService.getLearnedParseContext(user.id)
   );
   const selectedFlow = selectAgentFlow(env.USE_AGENT_FIRST_ORCHESTRATION === true);
   let bodyForInterpretation = body;
@@ -1940,14 +1916,10 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     | Awaited<ReturnType<typeof parseWithAgentLayer>>
     | null = null;
 
-  if (selectedFlow === "agent_first" && !user && PLAN_TODAY_PATTERN.test(body)) {
-    return {
-      reply: adminReply("Please register first with BUSINESS <name> so I can build your day plan.")
-    };
-  }
+  parseResult = tryResolvePriorityPendingVendorDebtFollowUp(body, parseContext);
 
   const planTodayExecutor =
-    user && selectedFlow === "agent_first"
+    selectedFlow === "agent_first"
       ? buildPlanTodayToolExecutor({
           getTodayPlan: ({ timezone }) =>
             remindersService.buildTodayPlan({
@@ -1956,7 +1928,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
             })
         })
       : undefined;
-  if (selectedFlow === "agent_first") {
+  if (selectedFlow === "agent_first" && !parseResult) {
     const dialogResult = await manageDialogTurn({
       message: body,
       context: parseContext
@@ -2007,7 +1979,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
       }
 
       const resolution = await resolveSemanticCapability({
-        userId: user?.id ?? "__anonymous__",
+        userId: user.id,
         capability: dialogResult.capability,
         entities: dialogResult.entities,
         confidence: 0.9
@@ -2089,7 +2061,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
 
   if (selectedFlow === "agent_first" && semanticResult?.status === "decision") {
     const resolution = await resolveSemanticCapability({
-      userId: user?.id ?? "__anonymous__",
+      userId: user.id,
       capability: semanticResult.decision.capability,
       entities: semanticResult.decision.entities,
       confidence: semanticResult.confidence
@@ -2112,12 +2084,6 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     }
 
     if (semanticResult.decision.capability === "plan_today") {
-      if (!user) {
-        return {
-          reply: adminReply("Please register first with BUSINESS <name> so I can build your day plan.")
-        };
-      }
-
       const planTodayResult = planTodayExecutor
         ? await planTodayExecutor({ toolName: "planToday", toolInput: {} })
         : { status: "not_handled" as const };
@@ -2147,8 +2113,8 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
   if (selectedFlow === "agent_first" && !parseResult) {
     const boundedReply = await buildBoundedAssistantReply({
       message: body,
-      businessName: user?.businessName,
-      registered: Boolean(user),
+      businessName: user.businessName,
+      registered: true,
       context: conversationMemory.getAgentParseContext(message.from)
     });
 
@@ -2157,7 +2123,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
       : {
           reply: guideReply(
             buildCommandGuide({
-              registered: Boolean(user),
+              registered: true,
               lastIntent: conversationMemory.get(message.from).lastIntent
             })
           )
@@ -2638,8 +2604,8 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     conversationMemory.clearPendingFlow(message.from);
     const boundedReply = await buildBoundedAssistantReply({
       message: body,
-      businessName: user?.businessName,
-      registered: Boolean(user),
+      businessName: user.businessName,
+      registered: true,
       context: conversationMemory.getAgentParseContext(message.from)
     });
 
@@ -2652,7 +2618,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     return {
       reply: guideReply(
         buildCommandGuide({
-          registered: Boolean(user),
+          registered: true,
           lastIntent: effectiveParseResult.analysis?.intent ?? conversationMemory.get(message.from).lastIntent
         })
       )
@@ -2665,7 +2631,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
       reply: guideReply(
         "I understood part of it but couldn't turn it into a safe action.",
         buildCommandGuide({
-          registered: Boolean(user),
+          registered: true,
           lastIntent: effectiveParseResult.analysis?.intent ?? conversationMemory.get(message.from).lastIntent
         })
       )
@@ -2688,10 +2654,6 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
       };
     }
 
-    if (!user) {
-      return { reply: adminReply("Please register first with BUSINESS <name>.") };
-    }
-
     return executeIntent({
       intent: pending.intent,
       phone: message.from,
@@ -2710,37 +2672,6 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     conversationMemory.clearPendingJobDisambiguation(message.from);
     conversationMemory.clearPendingFlow(message.from);
     return { reply: adminReply("Cancelled. No changes were made.") };
-  }
-
-  if (!user) {
-    if (intent.type === "onboarding_submit") {
-      await usersService.createWithBusinessName({
-        phone: message.from,
-        businessName: intent.businessName
-      });
-
-      return {
-        reply: adminReply("Welcome. Your assistant is ready.", "Send NEW JOB to log your first job.")
-      };
-    }
-
-    if (looksLikeBusinessName(body)) {
-      await usersService.createWithBusinessName({
-        phone: message.from,
-        businessName: body
-      });
-
-      return {
-        reply: adminReply("Welcome. Your assistant is ready.", "Send NEW JOB to log your first job.")
-      };
-    }
-
-    return {
-      reply: assistantReply(
-        "Welcome.",
-        buildCommandGuide({ registered: false })
-      )
-    };
   }
 
   const requiresConfirmation = WriteIntentTypeSchema.safeParse(intent.type).success;

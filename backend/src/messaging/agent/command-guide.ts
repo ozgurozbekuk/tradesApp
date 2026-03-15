@@ -5,7 +5,7 @@ type CommandGuideOptions = {
 
 const GUIDES = {
   onboarding: [
-    "BUSINESS Ozgur Plumbing"
+    "Register on the website first"
   ],
   jobs: [
     "NEW JOB customer: John; title: Boiler repair; total: 450",
