@@ -1,6 +1,6 @@
-import type { PendingFlowEntityState, WorkflowName } from "../engine/contracts";
+import type { EntityResolutionResult, WorkflowName } from "../engine/contracts";
 
-export type EntityResolverResult = PendingFlowEntityState;
+export type EntityResolverResult = EntityResolutionResult;
 
 export const resolveWorkflowEntities = async (_input: {
   workflow: WorkflowName;
@@ -10,4 +10,3 @@ export const resolveWorkflowEntities = async (_input: {
     status: "idle"
   };
 };
-
