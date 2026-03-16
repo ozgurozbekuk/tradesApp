@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { env } from "../config/env";
 import { sendWhatsAppMessage, validateTwilioSignature } from "../integrations/twilio";
-import { routeIncomingMessage } from "../messaging/router";
 import { conversationMemory } from "../messaging/agent/context-memory";
+import { routeIncomingMessageWithConversationV2 } from "../conversation-v2/router";
 import { logInboundMessage, logOutboundMessage } from "../services/audit-logs.service";
 import { prisma } from "../db/prisma";
 
@@ -95,7 +95,7 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       console.warn("Inbound audit log failed", message);
     }
 
-    const routed = await routeIncomingMessage({
+    const routed = await routeIncomingMessageWithConversationV2({
       from: phone,
       body,
       messageSid
@@ -105,14 +105,16 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       return res.status(200).json({ status: "ok", suppressed: true });
     }
 
-    conversationMemory.appendTurn(phone, {
-      role: "user",
-      text: body
-    });
-    conversationMemory.appendTurn(phone, {
-      role: "assistant",
-      text: routed.reply
-    });
+    if (routed.source === "v1") {
+      conversationMemory.appendTurn(phone, {
+        role: "user",
+        text: body
+      });
+      conversationMemory.appendTurn(phone, {
+        role: "assistant",
+        text: routed.reply
+      });
+    }
 
     let outbound;
     try {
