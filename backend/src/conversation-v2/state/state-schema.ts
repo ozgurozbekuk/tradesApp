@@ -95,7 +95,14 @@ export const confirmationStateSchema = z.discriminatedUnion("type", [
 export const createCustomerSlotsSchema = z
   .object({
     customer_name: z.string().min(1).optional(),
-    customer_phone: z.string().min(1).optional(),
+    customer_phone: z
+      .string()
+      .min(1)
+      .optional()
+      .refine(
+        (value) => value === undefined || value.replace(/\D/g, "").length >= 7,
+        "customer_phone must contain at least 7 digits"
+      ),
     notes: z.string().min(1).optional()
   })
   .strict();
