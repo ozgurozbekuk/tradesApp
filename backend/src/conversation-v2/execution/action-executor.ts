@@ -61,6 +61,17 @@ const buildSummaryReply = (label: string, summary: {
 }) =>
   `${label}: created ${summary.jobsCreated}, completed ${summary.jobsCompleted}, paid ${penceToPounds(summary.paymentsReceivedPence)}, spent ${penceToPounds(summary.expensesPaidPence)}, outstanding ${penceToPounds(summary.outstandingPence)}.`;
 
+const resolveMonthlySummaryPeriod = (slots: Record<string, unknown>): "30d" => {
+  const month = typeof slots.month === "number" ? slots.month : undefined;
+  const year = typeof slots.year === "number" ? slots.year : undefined;
+
+  // Current reporting service only supports rolling windows, so monthly summary
+  // uses the 30-day period until a calendar-month report is added.
+  void month;
+  void year;
+  return "30d";
+};
+
 const getResolvedId = (entityState: EntityResolutionResult, key: "customerId" | "vendorId" | "jobId") =>
   entityState.status === "resolved" ? entityState.resolvedIds[key] : undefined;
 
@@ -243,8 +254,12 @@ export const executeWorkflowAction = async (input: {
       await services.vendorPayments.addExpensePaid({
         userId: input.userId,
         amountPence,
-        note: typeof input.slots.note === "string" ? input.slots.note : undefined,
-        counterpartyName: typeof input.slots.vendor_query === "string" ? input.slots.vendor_query : undefined
+        note:
+          [input.slots.category, input.slots.note]
+            .filter((value) => typeof value === "string" && value.trim().length > 0)
+            .join(" - ") || undefined,
+        counterpartyName: typeof input.slots.vendor_query === "string" ? input.slots.vendor_query : undefined,
+        occurredAt: parseOccurredAt(input.slots.occurred_on)
       });
 
       return {
@@ -264,7 +279,7 @@ export const executeWorkflowAction = async (input: {
     }
 
     case "monthly_summary": {
-      const summary = await services.reports.getSummary(input.userId, "30d");
+      const summary = await services.reports.getSummary(input.userId, resolveMonthlySummaryPeriod(input.slots));
       return {
         workflow: input.workflow,
         reply: buildSummaryReply("Monthly summary", summary),

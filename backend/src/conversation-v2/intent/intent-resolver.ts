@@ -322,10 +322,26 @@ const resolveExpenseIntent = (text: string): IntentResolutionResult | null => {
 
   return buildIntent("record_expense", "high", {
     amount_pence: parseMoneyToPence(match[1]),
+    category: match[2]?.trim(),
     note: match[2]?.trim(),
     vendor_query: match[3]?.trim(),
     occurred_on: match[4]?.trim() ?? extractOccurredOn(text)
   });
+};
+
+const resolvePartialExpenseIntent = (text: string): IntentResolutionResult | null => {
+  const vendorOnly = text.match(/^(?:record|add|log)\s+expense\s+(?:at|for)\s+(.+)$/i);
+  if (vendorOnly) {
+    return buildIntent("record_expense", "medium", {
+      note: vendorOnly[1].trim()
+    });
+  }
+
+  if (/^(?:record|add|log)\s+expense$/i.test(text)) {
+    return buildIntent("record_expense", "medium", {});
+  }
+
+  return null;
 };
 
 const resolveHighConfidenceIntent = (text: string): IntentResolutionResult | null => {
@@ -360,6 +376,10 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (/^add expense$/i.test(text)) {
     return buildIntent("record_expense", "medium", {});
+  }
+
+  if (/^(?:record|add|log)\s+expense\b/i.test(text)) {
+    return resolvePartialExpenseIntent(text);
   }
 
   if (/^(?:record|add|log)\s+vendor\s+debt\b/i.test(text) || /^(?:i\s+)?owe\b/i.test(text)) {
