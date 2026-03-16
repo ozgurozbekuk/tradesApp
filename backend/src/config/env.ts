@@ -45,6 +45,11 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  USE_CONVERSATION_V2: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  CONVERSATION_V2_TEST_PHONES: z.string().optional(),
   AGENT_LEGACY_FALLBACK_ENABLED: z
     .string()
     .optional()

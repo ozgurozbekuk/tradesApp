@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { runCronTick } from "../cron";
 import { env } from "../config/env";
-import { routeIncomingMessage } from "../messaging/router";
+import { routeIncomingMessageWithConversationV2 } from "../conversation-v2/router";
 import { parseWithAgentLayer } from "../messaging/parsers/agent-orchestrator";
 import { AgentLearningService } from "../services/agent-learning.service";
 
@@ -57,7 +57,7 @@ testRouter.post("/internal/test/message", async (req, res) => {
   }
 
   const parse = await parseWithAgentLayer(body);
-  const response = await routeIncomingMessage({
+  const response = await routeIncomingMessageWithConversationV2({
     from,
     body,
     messageSid: `TEST-${Date.now()}`
