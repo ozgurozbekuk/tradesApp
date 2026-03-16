@@ -110,7 +110,7 @@ export const createCustomerSlotsSchema = z
 export const recordVendorDebtSlotsSchema = z
   .object({
     vendor_query: z.string().min(1).optional(),
-    amount_pence: z.number().int().nonnegative().optional(),
+    amount_pence: z.number().int().positive("amount_pence must be greater than 0").optional(),
     note: z.string().min(1).optional(),
     occurred_on: z.string().min(1).optional()
   })
@@ -119,7 +119,7 @@ export const recordVendorDebtSlotsSchema = z
 export const recordVendorPaymentSlotsSchema = z
   .object({
     vendor_query: z.string().min(1).optional(),
-    amount_pence: z.number().int().nonnegative().optional(),
+    amount_pence: z.number().int().positive("amount_pence must be greater than 0").optional(),
     note: z.string().min(1).optional(),
     occurred_on: z.string().min(1).optional()
   })
