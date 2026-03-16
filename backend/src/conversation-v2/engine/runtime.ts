@@ -198,43 +198,51 @@ export const runConversationV2Turn = async (
     lastMessageAt: now.toISOString()
   };
 
-  if (baseState.pendingFlow) {
+  let workingState = baseState;
+
+  if (workingState.pendingFlow) {
     const topicShiftDecision = decideTopicShift({
-      pendingFlow: baseState.pendingFlow,
+      pendingFlow: workingState.pendingFlow,
       text: normalizedText
     });
 
-    if (topicShiftDecision.type === "topic_shift") {
+    if (topicShiftDecision.type === "cancel_pending") {
       const nextState: ConversationStateV2 = {
-        ...baseState,
+        ...workingState,
         pendingFlow: undefined
       };
 
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: nextState,
-        reply:
-          topicShiftDecision.reason === "explicit_cancel"
-            ? buildPendingFlowCanceledReply()
-            : buildPendingFlowShiftedReply(),
+        reply: buildPendingFlowCanceledReply(),
         status: "unsupported"
       });
     }
 
-    const continuationFields = extractContinuationFields(baseState.pendingFlow, input.body);
-    const slotState = mergePendingFlowSlots(baseState.pendingFlow, continuationFields);
+    if (topicShiftDecision.type === "shift_to_fresh_intent") {
+      workingState = {
+        ...workingState,
+        pendingFlow: undefined
+      };
+    }
+  }
+
+  if (workingState.pendingFlow) {
+    const continuationFields = extractContinuationFields(workingState.pendingFlow, input.body);
+    const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
     const resolution = await resolvePendingState({
-      workflow: baseState.pendingFlow.workflow,
+      workflow: workingState.pendingFlow.workflow,
       slotState
     });
 
     if (resolution.kind === "missing_slots") {
-      const prompt = buildMissingSlotPrompt(baseState.pendingFlow.workflow, resolution.slotState.missingSlots);
+      const prompt = buildMissingSlotPrompt(workingState.pendingFlow.workflow, resolution.slotState.missingSlots);
       const pendingFlow = buildPendingFlow({
-        workflow: baseState.pendingFlow.workflow,
+        workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
-        entityState: baseState.pendingFlow.entityState,
-        previous: baseState.pendingFlow,
+        entityState: workingState.pendingFlow.entityState,
+        previous: workingState.pendingFlow,
         now,
         sourceMessageId: input.messageSid,
         prompt
@@ -243,7 +251,7 @@ export const runConversationV2Turn = async (
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: {
-          ...baseState,
+          ...workingState,
           pendingFlow
         },
         reply: prompt,
@@ -255,10 +263,10 @@ export const runConversationV2Turn = async (
     if (resolution.kind === "entity_clarification") {
       const prompt = buildEntityClarificationReply();
       const pendingFlow = buildPendingFlow({
-        workflow: baseState.pendingFlow.workflow,
+        workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
         entityState: resolution.entityState,
-        previous: baseState.pendingFlow,
+        previous: workingState.pendingFlow,
         now,
         sourceMessageId: input.messageSid,
         prompt
@@ -267,7 +275,7 @@ export const runConversationV2Turn = async (
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: {
-          ...baseState,
+          ...workingState,
           pendingFlow
         },
         reply: prompt,
@@ -279,11 +287,11 @@ export const runConversationV2Turn = async (
     if (resolution.kind === "confirmation") {
       const prompt = buildConfirmationReply(resolution.confirmationState.prompt);
       const pendingFlow = buildPendingFlow({
-        workflow: baseState.pendingFlow.workflow,
+        workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
         entityState: resolution.entityState,
         confirmationState: resolution.confirmationState,
-        previous: baseState.pendingFlow,
+        previous: workingState.pendingFlow,
         now,
         sourceMessageId: input.messageSid,
         prompt
@@ -292,7 +300,7 @@ export const runConversationV2Turn = async (
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: {
-          ...baseState,
+          ...workingState,
           pendingFlow
         },
         reply: prompt,
@@ -302,7 +310,7 @@ export const runConversationV2Turn = async (
     }
 
     const executionResult = await executeWorkflowAction({
-      workflow: baseState.pendingFlow.workflow,
+      workflow: workingState.pendingFlow.workflow,
       slots: resolution.slotState.slots
     });
 
@@ -310,9 +318,9 @@ export const runConversationV2Turn = async (
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: {
-          ...baseState,
+          ...workingState,
           recentRefs: {
-            ...baseState.recentRefs,
+            ...workingState.recentRefs,
             ...executionResult.recentRefs
           },
           pendingFlow: undefined,
@@ -325,10 +333,10 @@ export const runConversationV2Turn = async (
     }
 
     const pendingFlow = buildPendingFlow({
-      workflow: baseState.pendingFlow.workflow,
+      workflow: workingState.pendingFlow.workflow,
       slotState: resolution.slotState,
       entityState: resolution.entityState,
-      previous: baseState.pendingFlow,
+      previous: workingState.pendingFlow,
       now,
       sourceMessageId: input.messageSid,
       prompt: buildWorkflowReply(executionResult)
@@ -337,7 +345,7 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: {
-        ...baseState,
+        ...workingState,
         pendingFlow
       },
       reply: buildWorkflowReply(executionResult),
@@ -353,8 +361,11 @@ export const runConversationV2Turn = async (
   if (intentResolution.type === "unsupported") {
     return saveAndReturn({
       stateStore: dependencies.stateStore,
-      state: baseState,
-      reply: buildUnsupportedReply(),
+      state: workingState,
+      reply:
+        baseState.pendingFlow && !workingState.pendingFlow
+          ? buildPendingFlowShiftedReply()
+          : buildUnsupportedReply(),
       status: "unsupported"
     });
   }
@@ -379,7 +390,7 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: {
-        ...baseState,
+        ...workingState,
         pendingFlow
       },
       reply: prompt,
@@ -402,7 +413,7 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: {
-        ...baseState,
+        ...workingState,
         pendingFlow
       },
       reply: prompt,
@@ -426,7 +437,7 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: {
-        ...baseState,
+        ...workingState,
         pendingFlow
       },
       reply: prompt,
@@ -453,7 +464,7 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: {
-        ...baseState,
+        ...workingState,
         pendingFlow
       },
       reply: buildWorkflowReply(executionResult),
@@ -465,9 +476,9 @@ export const runConversationV2Turn = async (
   return saveAndReturn({
     stateStore: dependencies.stateStore,
     state: {
-      ...baseState,
+      ...workingState,
       recentRefs: {
-        ...baseState.recentRefs,
+        ...workingState.recentRefs,
         ...executionResult.recentRefs
       },
       lastCompletedWorkflow: executionResult.workflow
