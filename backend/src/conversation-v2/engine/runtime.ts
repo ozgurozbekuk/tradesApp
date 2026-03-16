@@ -149,17 +149,11 @@ const resolvePendingState = async (input: {
     recentRefs: input.recentRefs
   });
 
-  if (entityState.status === "ambiguous" || entityState.status === "not_found") {
-    return {
-      kind: "entity_clarification",
-      slotState: input.slotState,
-      entityState
-    };
-  }
-
   const confirmation = await resolveWorkflowConfirmation({
+    userId: input.userId,
     workflow: input.workflow,
-    slots: input.slotState.slots
+    slots: input.slotState.slots,
+    entityState
   });
 
   if (confirmation.type === "required") {
@@ -168,6 +162,14 @@ const resolvePendingState = async (input: {
       slotState: input.slotState,
       entityState,
       confirmationState: confirmation.confirmation
+    };
+  }
+
+  if (entityState.status === "ambiguous" || entityState.status === "not_found") {
+    return {
+      kind: "entity_clarification",
+      slotState: input.slotState,
+      entityState
     };
   }
 
