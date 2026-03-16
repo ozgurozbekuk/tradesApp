@@ -250,6 +250,27 @@ const resolveCreateJobIntent = (text: string): IntentResolutionResult | null => 
   });
 };
 
+const resolvePartialCreateJobIntent = (text: string): IntentResolutionResult | null => {
+  const customerAndTitle = text.match(
+    /^(?:create|add|new)\s+job\s+(?:for\s+)?(.+?)\s+(?:called|title|job)\s+(.+)$/i
+  );
+  if (customerAndTitle) {
+    return buildIntent("create_job", "medium", {
+      customer_query: customerAndTitle[1].trim(),
+      title: customerAndTitle[2].trim()
+    });
+  }
+
+  const customerOnly = text.match(/^(?:create|add|new)\s+job\s+(?:for\s+)?(.+)$/i);
+  if (customerOnly) {
+    return buildIntent("create_job", "medium", {
+      customer_query: customerOnly[1].trim()
+    });
+  }
+
+  return null;
+};
+
 const resolveUpdateJobStatusIntent = (text: string): IntentResolutionResult | null => {
   const status = extractStatus(text);
   if (!status) {
@@ -267,6 +288,26 @@ const resolveUpdateJobStatusIntent = (text: string): IntentResolutionResult | nu
     job_query: match[1].trim(),
     status: match[2].toLowerCase() as "active" | "completed" | "canceled"
   });
+};
+
+const resolvePartialUpdateJobStatusIntent = (text: string): IntentResolutionResult | null => {
+  const status = extractStatus(text);
+  if (status && /^(?:mark|set|update)\b/i.test(text)) {
+    const withoutStatus = text.replace(/\b(active|completed|canceled)\b/i, "").replace(/^(?:mark|set|update)\s*/i, "").replace(/\bas\s*$/i, "").trim();
+    return buildIntent("update_job_status", "medium", {
+      job_query: withoutStatus || undefined,
+      status
+    });
+  }
+
+  if (/^(?:mark|set|update)\b/i.test(text)) {
+    const jobQuery = text.replace(/^(?:mark|set|update)\s*/i, "").trim();
+    return buildIntent("update_job_status", "medium", {
+      job_query: jobQuery || undefined
+    });
+  }
+
+  return null;
 };
 
 const resolveExpenseIntent = (text: string): IntentResolutionResult | null => {
@@ -327,6 +368,14 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (/^(?:record|add|log)\s+vendor\s+payment\b/i.test(text) || /^(?:pay|paid)\b/i.test(text)) {
     return resolvePartialVendorPaymentIntent(text);
+  }
+
+  if (/^(?:create|add|new)\s+job\b/i.test(text)) {
+    return resolvePartialCreateJobIntent(text);
+  }
+
+  if (/^(?:mark|set|update)\b/i.test(text)) {
+    return resolvePartialUpdateJobStatusIntent(text);
   }
 
   if (/^new customer\s+.+/i.test(text) && !isLikelyPhone(text)) {

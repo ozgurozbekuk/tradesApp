@@ -32,6 +32,26 @@ const parseOccurredAt = (value: unknown) => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+const parseDueDate = (value: unknown) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "today") {
+    return new Date();
+  }
+
+  if (normalized === "tomorrow") {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 const buildSummaryReply = (label: string, summary: {
   jobsCreated: number;
   jobsCompleted: number;
@@ -143,6 +163,7 @@ export const executeWorkflowAction = async (input: {
         priceTotalPence: Number(input.slots.total_pence ?? 0),
         depositPence:
           typeof input.slots.deposit_pence === "number" ? input.slots.deposit_pence : undefined,
+        dueDate: parseDueDate(input.slots.due_date),
         notes: typeof input.slots.notes === "string" ? input.slots.notes : undefined
       });
 
@@ -198,6 +219,14 @@ export const executeWorkflowAction = async (input: {
       const plan = await services.reminders.buildTodayPlan({
         userId: input.userId
       });
+
+      if (plan.todayJobs.length === 0) {
+        return {
+          workflow: input.workflow,
+          reply: `Today: ${plan.scheduledToday} scheduled, ${plan.dueSoonCount} due soon, ${plan.overdueCount} overdue.`,
+          completed: true
+        };
+      }
 
       const firstLine = `Today: ${plan.scheduledToday} scheduled, ${plan.dueSoonCount} due soon, ${plan.overdueCount} overdue.`;
       const jobLines = plan.todayJobs.slice(0, 5).map((job) => `- ${job.customerName}: ${job.title} at ${job.scheduledFor}`);

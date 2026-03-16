@@ -13,6 +13,30 @@ const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   monthly_summary: []
 };
 
+const parseDueDate = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized === "today") {
+    return new Date();
+  }
+
+  if (normalized === "tomorrow") {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  }
+
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(normalized)) {
+    return undefined;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
   create_customer: ["customer_name", "customer_phone", "notes"],
   record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
@@ -117,9 +141,17 @@ const validateWorkflowSlots = (workflow: WorkflowName, slots: Record<string, unk
   const validation = schema.safeParse(slots);
 
   if (validation.success) {
+    const validationErrors: string[] = [];
+    const validatedSlots = validation.data as Record<string, unknown>;
+    if (workflow === "create_job" && typeof validatedSlots.due_date === "string") {
+      if (!parseDueDate(validatedSlots.due_date)) {
+        validationErrors.push("I could not understand that due date. Please use a clear date like 2026-03-20 or say tomorrow.");
+      }
+    }
+
     return {
-      slots: validation.data as Record<string, unknown>,
-      validationErrors: [] as string[]
+      slots: validatedSlots,
+      validationErrors
     };
   }
 
