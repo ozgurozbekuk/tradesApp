@@ -12,6 +12,26 @@ import {
 
 const penceToPounds = (value: number) => `£${(value / 100).toFixed(2)}`;
 
+const parseOccurredAt = (value: unknown) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "today") {
+    return new Date();
+  }
+
+  if (normalized === "yesterday") {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 const buildSummaryReply = (label: string, summary: {
   jobsCreated: number;
   jobsCompleted: number;
@@ -61,7 +81,8 @@ export const executeWorkflowAction = async (input: {
         userId: input.userId,
         vendorName,
         amountPence,
-        note: typeof input.slots.note === "string" ? input.slots.note : undefined
+        note: typeof input.slots.note === "string" ? input.slots.note : undefined,
+        occurredAt: parseOccurredAt(input.slots.occurred_on)
       });
 
       return {
@@ -90,7 +111,8 @@ export const executeWorkflowAction = async (input: {
         userId: input.userId,
         vendorId,
         amountPence,
-        note: typeof input.slots.note === "string" ? input.slots.note : undefined
+        note: typeof input.slots.note === "string" ? input.slots.note : undefined,
+        occurredAt: parseOccurredAt(input.slots.occurred_on)
       });
 
       return {

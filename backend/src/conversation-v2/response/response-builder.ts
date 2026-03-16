@@ -90,3 +90,5 @@ export const buildConfirmationReply = (confirmation: ConfirmationState) => confi
 export const buildPendingFlowCanceledReply = () => "Okay, I have canceled the current workflow.";
 
 export const buildPendingFlowShiftedReply = () => "I have dropped the previous workflow and switched context.";
+
+export const buildConfirmationRetryReply = () => "Please reply with yes or no.";

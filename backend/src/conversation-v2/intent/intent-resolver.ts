@@ -175,6 +175,26 @@ const resolveVendorDebtIntent = (text: string): IntentResolutionResult | null =>
   });
 };
 
+const resolvePartialVendorDebtIntent = (text: string): IntentResolutionResult | null => {
+  const vendorOnly =
+    text.match(/^(?:record|add|log)\s+vendor\s+debt\s+(?:for\s+)?(.+)$/i) ??
+    text.match(/^(?:i\s+)?owe\s+(.+)$/i);
+  if (vendorOnly) {
+    return buildIntent("record_vendor_debt", "medium", {
+      vendor_query: vendorOnly[1].trim()
+    });
+  }
+
+  const amountOnly = text.match(/^(?:record|add|log)\s+vendor\s+debt\s+£?(-?\d+(?:\.\d{1,2})?)$/i);
+  if (amountOnly) {
+    return buildIntent("record_vendor_debt", "medium", {
+      amount_pence: parseMoneyToPence(amountOnly[1])
+    });
+  }
+
+  return null;
+};
+
 const resolveVendorPaymentIntent = (text: string): IntentResolutionResult | null => {
   const match =
     text.match(
@@ -191,6 +211,26 @@ const resolveVendorPaymentIntent = (text: string): IntentResolutionResult | null
     note: match[3]?.trim(),
     occurred_on: extractOccurredOn(text)
   });
+};
+
+const resolvePartialVendorPaymentIntent = (text: string): IntentResolutionResult | null => {
+  const vendorOnly =
+    text.match(/^(?:record|add|log)\s+vendor\s+payment\s+(?:to|for)\s+(.+)$/i) ??
+    text.match(/^(?:pay|paid)\s+(.+)$/i);
+  if (vendorOnly) {
+    return buildIntent("record_vendor_payment", "medium", {
+      vendor_query: vendorOnly[1].trim()
+    });
+  }
+
+  const amountOnly = text.match(/^(?:record|add|log)\s+vendor\s+payment\s+£?(-?\d+(?:\.\d{1,2})?)$/i);
+  if (amountOnly) {
+    return buildIntent("record_vendor_payment", "medium", {
+      amount_pence: parseMoneyToPence(amountOnly[1])
+    });
+  }
+
+  return null;
 };
 
 const resolveCreateJobIntent = (text: string): IntentResolutionResult | null => {
@@ -279,6 +319,14 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (/^add expense$/i.test(text)) {
     return buildIntent("record_expense", "medium", {});
+  }
+
+  if (/^(?:record|add|log)\s+vendor\s+debt\b/i.test(text) || /^(?:i\s+)?owe\b/i.test(text)) {
+    return resolvePartialVendorDebtIntent(text);
+  }
+
+  if (/^(?:record|add|log)\s+vendor\s+payment\b/i.test(text) || /^(?:pay|paid)\b/i.test(text)) {
+    return resolvePartialVendorPaymentIntent(text);
   }
 
   if (/^new customer\s+.+/i.test(text) && !isLikelyPhone(text)) {

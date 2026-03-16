@@ -14,6 +14,7 @@ import { executeWorkflowAction } from "../execution/action-executor";
 import { resolveIntentV2 } from "../intent/intent-resolver";
 import {
   buildConfirmationReply,
+  buildConfirmationRetryReply,
   buildEntityClarificationReply,
   buildMissingSlotPrompt,
   buildPendingFlowCanceledReply,
@@ -58,6 +59,19 @@ type PendingResolution =
     };
 
 const normalizeIncomingText = (text: string) => text.trim().replace(/\s+/g, " ");
+
+const parseConfirmationAnswer = (text: string) => {
+  const normalized = text.trim().toLowerCase();
+  if (["yes", "y", "yeah", "yep", "confirm", "ok", "ok confirm"].includes(normalized)) {
+    return "yes";
+  }
+
+  if (["no", "n", "nope", "cancel"].includes(normalized)) {
+    return "no";
+  }
+
+  return "unknown";
+};
 
 const buildPendingFlow = (input: {
   workflow: WorkflowName;
@@ -243,6 +257,67 @@ export const runConversationV2Turn = async (
   }
 
   if (workingState.pendingFlow) {
+    if (workingState.pendingFlow.step === "confirmation" && workingState.pendingFlow.confirmationState) {
+      const confirmationAnswer = parseConfirmationAnswer(normalizedText);
+
+      if (confirmationAnswer === "no") {
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: {
+            ...workingState,
+            pendingFlow: undefined
+          },
+          reply: buildPendingFlowCanceledReply(),
+          workflow: workingState.pendingFlow.workflow,
+          status: "unsupported"
+        });
+      }
+
+      if (confirmationAnswer === "yes") {
+        const executionResult = await executeWorkflowAction({
+          userId: input.userId,
+          workflow: workingState.pendingFlow.workflow,
+          slots: workingState.pendingFlow.slots,
+          entityState: workingState.pendingFlow.entityState,
+          services: dependencies.services
+        });
+
+        if (executionResult.completed) {
+          return saveAndReturn({
+            stateStore: dependencies.stateStore,
+            state: {
+              ...workingState,
+              recentRefs: {
+                ...workingState.recentRefs,
+                ...executionResult.recentRefs
+              },
+              pendingFlow: undefined,
+              lastCompletedWorkflow: executionResult.workflow
+            },
+            reply: buildWorkflowReply(executionResult),
+            workflow: executionResult.workflow,
+            status: "completed"
+          });
+        }
+
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: workingState,
+          reply: buildWorkflowReply(executionResult),
+          workflow: workingState.pendingFlow.workflow,
+          status: "pending"
+        });
+      }
+
+      return saveAndReturn({
+        stateStore: dependencies.stateStore,
+        state: workingState,
+        reply: buildConfirmationRetryReply(),
+        workflow: workingState.pendingFlow.workflow,
+        status: "pending"
+      });
+    }
+
     const continuationFields = extractContinuationFields(workingState.pendingFlow, input.body);
     const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
     const resolution = await resolvePendingState({
