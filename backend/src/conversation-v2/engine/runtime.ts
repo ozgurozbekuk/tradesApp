@@ -1,3 +1,4 @@
+import { env } from "../../config/env";
 import type {
   ConfirmationState,
   ConversationStateV2,
@@ -8,6 +9,10 @@ import type {
   WorkflowIntent,
   WorkflowName
 } from "./contracts";
+import { emitConversationV2Event } from "../observability";
+import type { ConversationV2SemanticLlmCaller } from "../semantic/interpreter";
+import { interpretConversationV2Semantically } from "../semantic/interpreter";
+import { normalizeSemanticFrontDoorResult } from "../semantic/normalizer";
 import { resolveWorkflowConfirmation } from "../confirmation/confirmation-handler";
 import { resolveWorkflowEntities } from "../entity/entity-resolver";
 import { executeWorkflowAction } from "../execution/action-executor";
@@ -34,6 +39,7 @@ import { decideTopicShift } from "../topic/topic-shift";
 export type ConversationV2RuntimeDependencies = {
   stateStore: ConversationStateStore;
   services?: import("../adapters/services").ConversationV2Services;
+  semanticLlmCaller?: ConversationV2SemanticLlmCaller;
 };
 
 type PendingResolution =
@@ -59,6 +65,11 @@ type PendingResolution =
     };
 
 const normalizeIncomingText = (text: string) => text.trim().replace(/\s+/g, " ");
+
+const readSemanticFrontDoorEnabled = () =>
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR === undefined
+    ? env.USE_V2_SEMANTIC_FRONT_DOOR
+    : process.env.USE_V2_SEMANTIC_FRONT_DOOR === "true";
 
 const parseConfirmationAnswer = (text: string) => {
   const normalized = text.trim().toLowerCase();
@@ -212,6 +223,46 @@ const saveAndReturn = async (input: {
   };
 };
 
+const resolveSemanticNormalizedTurn = async (input: {
+  userId: string;
+  body: string;
+  recentRefs: ConversationStateV2["recentRefs"];
+  pendingFlow?: Pick<PendingFlow, "workflow" | "step" | "slots" | "missingSlots" | "prompt">;
+  semanticLlmCaller?: ConversationV2SemanticLlmCaller;
+}) => {
+  if (!readSemanticFrontDoorEnabled()) {
+    emitConversationV2Event("conversation_v2.semantic.skipped", {
+      userId: input.userId,
+      reason: "flag_disabled"
+    });
+    return null;
+  }
+
+  const semanticResult = await interpretConversationV2Semantically(
+    {
+      message: input.body,
+      recentRefs: input.recentRefs,
+      pendingFlow: input.pendingFlow
+    },
+    input.semanticLlmCaller
+  );
+
+  const normalized = normalizeSemanticFrontDoorResult(semanticResult);
+  emitConversationV2Event("conversation_v2.semantic.result", {
+    userId: input.userId,
+    type: normalized.type,
+    pendingWorkflow: input.pendingFlow?.workflow,
+    pendingStep: input.pendingFlow?.step,
+    workflow: normalized.type === "workflow_intent" ? normalized.intent.workflow : undefined,
+    mode: normalized.type === "workflow_intent" ? normalized.mode : undefined,
+    delegatedCapability: normalized.type === "delegate_to_v1" ? normalized.capability : undefined,
+    hasClarificationQuestion: normalized.type === "clarification",
+    reason: normalized.type === "unknown" ? normalized.reason : undefined
+  });
+
+  return normalized.type === "unknown" ? null : normalized;
+};
+
 export const runConversationV2Turn = async (
   input: RouteIncomingMessageV2Input,
   dependencies: ConversationV2RuntimeDependencies
@@ -318,7 +369,61 @@ export const runConversationV2Turn = async (
       });
     }
 
-    const continuationFields = extractContinuationFields(workingState.pendingFlow, input.body);
+    const semanticPendingTurn = await resolveSemanticNormalizedTurn({
+      userId: input.userId,
+      body: input.body,
+      recentRefs: workingState.recentRefs,
+      pendingFlow: workingState.pendingFlow,
+      semanticLlmCaller: dependencies.semanticLlmCaller
+    });
+
+    if (
+      semanticPendingTurn?.type === "clarification" &&
+      (!semanticPendingTurn.workflow || semanticPendingTurn.workflow === workingState.pendingFlow.workflow)
+    ) {
+      emitConversationV2Event("conversation_v2.semantic.pending_clarification", {
+        userId: input.userId,
+        workflow: workingState.pendingFlow.workflow,
+        question: semanticPendingTurn.question
+      });
+
+      const pendingFlow = {
+        ...workingState.pendingFlow,
+        prompt: semanticPendingTurn.question,
+        updatedAt: now.toISOString()
+      };
+
+      return saveAndReturn({
+        stateStore: dependencies.stateStore,
+        state: {
+          ...workingState,
+          pendingFlow
+        },
+        reply: semanticPendingTurn.question,
+        workflow: pendingFlow.workflow,
+        status: "pending"
+      });
+    }
+
+    const continuationFields =
+      semanticPendingTurn?.type === "workflow_intent" &&
+      semanticPendingTurn.mode === "continue_pending" &&
+      semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
+        ? (semanticPendingTurn.intent.fields as Record<string, unknown>)
+        : extractContinuationFields(workingState.pendingFlow, input.body);
+
+    if (
+      semanticPendingTurn?.type === "workflow_intent" &&
+      semanticPendingTurn.mode === "continue_pending" &&
+      semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
+    ) {
+      emitConversationV2Event("conversation_v2.semantic.pending_continue", {
+        userId: input.userId,
+        workflow: workingState.pendingFlow.workflow,
+        filledKeys: Object.keys(semanticPendingTurn.intent.fields)
+      });
+    }
+
     const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
     const resolution = await resolvePendingState({
       userId: input.userId,
@@ -455,8 +560,56 @@ export const runConversationV2Turn = async (
     });
   }
 
-  const intentResolution = await resolveIntentV2({
-    text: normalizedText
+  const semanticFreshTurn = await resolveSemanticNormalizedTurn({
+    userId: input.userId,
+    body: input.body,
+    recentRefs: workingState.recentRefs,
+    semanticLlmCaller: dependencies.semanticLlmCaller
+  });
+
+  if (semanticFreshTurn?.type === "respond") {
+    emitConversationV2Event("conversation_v2.semantic.respond", {
+      userId: input.userId
+    });
+
+    return saveAndReturn({
+      stateStore: dependencies.stateStore,
+      state: workingState,
+      reply: semanticFreshTurn.message,
+      status: "completed"
+    });
+  }
+
+  if (semanticFreshTurn?.type === "delegate_to_v1") {
+    emitConversationV2Event("conversation_v2.semantic.delegate_to_v1", {
+      userId: input.userId,
+      capability: semanticFreshTurn.capability
+    });
+
+    return saveAndReturn({
+      stateStore: dependencies.stateStore,
+      state: workingState,
+      reply: buildUnsupportedReply(),
+      status: "unsupported"
+    });
+  }
+
+  const intentResolution =
+    semanticFreshTurn?.type === "workflow_intent" && semanticFreshTurn.mode === "fresh"
+      ? {
+          type: "intent" as const,
+          intent: semanticFreshTurn.intent
+        }
+      : await resolveIntentV2({
+          text: normalizedText
+        });
+
+  emitConversationV2Event("conversation_v2.runtime.intent_path", {
+    userId: input.userId,
+    semanticUsed: Boolean(semanticFreshTurn?.type === "workflow_intent" && semanticFreshTurn.mode === "fresh"),
+    semanticType: semanticFreshTurn?.type,
+    resultType: intentResolution.type,
+    workflow: intentResolution.type === "intent" ? intentResolution.intent.workflow : undefined
   });
 
   if (intentResolution.type === "unsupported") {

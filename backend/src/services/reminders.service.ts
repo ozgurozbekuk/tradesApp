@@ -2,7 +2,7 @@ import { BookingStatus, JobStatus, ReminderType, SubscriptionStatus } from "@pri
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { sendWhatsAppMessage } from "../integrations/twilio";
-import { calculateJobOutstandingPence } from "./jobs.service";
+import { calculateJobOutstandingPence } from "./job-outstanding";
 import { ReportsService } from "./reports.service";
 
 type UserAccess = {

@@ -1,0 +1,129 @@
+[
+  {
+    "name": "labeled create job",
+    "input": "add job : home cleaning , price:500 , customer : john , deposit : 100 , due:2 weeks",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "title": "home cleaning",
+        "total_pence": 50000,
+        "customer_query": "john",
+        "deposit_pence": 10000,
+        "due_date": "2 weeks"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "fresh",
+      "fields": {
+        "title": "home cleaning",
+        "total_pence": 50000,
+        "customer_query": "john"
+      }
+    }
+  },
+  {
+    "name": "casual create customer",
+    "input": "stick this down as customer Jack Turner 07000123456",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_customer",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_name": "Jack Turner",
+        "customer_phone": "07000123456"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_customer",
+      "mode": "fresh",
+      "fields": {
+        "customer_name": "Jack Turner",
+        "customer_phone": "07000123456"
+      }
+    }
+  },
+  {
+    "name": "pending follow-up multi slot",
+    "input": "title: boiler repair, price: 450",
+    "pending_flow": {
+      "workflow": "create_job",
+      "step": "slot_filling",
+      "slots": {},
+      "missingSlots": ["customer_query", "title", "total_pence"],
+      "prompt": "Which customer is this for?"
+    },
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "confidence": "high",
+      "fields": {
+        "title": "boiler repair",
+        "total_pence": 45000
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "fields": {
+        "title": "boiler repair",
+        "total_pence": 45000
+      }
+    }
+  },
+  {
+    "name": "export delegates to v1",
+    "input": "send me john's records as pdf",
+    "mock_output": {
+      "kind": "delegate_to_v1",
+      "capability": "export_pdf"
+    },
+    "expected": {
+      "type": "delegate_to_v1",
+      "capability": "export_pdf"
+    }
+  },
+  {
+    "name": "vendor summary delegates to v1",
+    "input": "show me vendor summary for this month",
+    "mock_output": {
+      "kind": "delegate_to_v1",
+      "capability": "vendor_summary"
+    },
+    "expected": {
+      "type": "delegate_to_v1",
+      "capability": "vendor_summary"
+    }
+  },
+  {
+    "name": "semantic clarification",
+    "input": "same as before",
+    "pending_flow": {
+      "workflow": "create_job",
+      "step": "slot_filling",
+      "slots": {},
+      "missingSlots": ["customer_query", "title", "total_pence"],
+      "prompt": "Which customer is this for?"
+    },
+    "mock_output": {
+      "kind": "clarification",
+      "question": "I still need the customer name and the total price.",
+      "workflow": "create_job",
+      "missing_fields": ["customer_query", "total_pence"]
+    },
+    "expected": {
+      "type": "clarification",
+      "question": "I still need the customer name and the total price.",
+      "workflow": "create_job",
+      "missingFields": ["customer_query", "total_pence"]
+    }
+  }
+]

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "../db/prisma";
-import { calculateJobOutstandingPence } from "./jobs.service";
+import { calculateJobOutstandingPence } from "./job-outstanding";
 import { env } from "../config/env";
 
 export type ExportKind = "jobs" | "customers" | "payments" | "vendor_ledgers" | "money_transactions";

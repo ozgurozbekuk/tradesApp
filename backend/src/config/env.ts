@@ -49,6 +49,10 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  USE_V2_SEMANTIC_FRONT_DOOR: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   CONVERSATION_V2_TEST_PHONES: z.string().optional(),
   AGENT_LEGACY_FALLBACK_ENABLED: z
     .string()

@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma";
-import { calculateJobOutstandingPence } from "./jobs.service";
+import { calculateJobOutstandingPence } from "./job-outstanding";
 
 export type CustomerRecordSummary = {
   id: string;
