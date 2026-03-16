@@ -123,8 +123,10 @@ const buildPendingFlow = (input: {
 };
 
 const resolvePendingState = async (input: {
+  userId: string;
   workflow: WorkflowName;
   slotState: SlotFillResult;
+  recentRefs: ConversationStateV2["recentRefs"];
 }): Promise<PendingResolution> => {
   if (input.slotState.missingSlots.length > 0) {
     return {
@@ -141,8 +143,10 @@ const resolvePendingState = async (input: {
   }
 
   const entityState = await resolveWorkflowEntities({
+    userId: input.userId,
     workflow: input.workflow,
-    slots: input.slotState.slots
+    slots: input.slotState.slots,
+    recentRefs: input.recentRefs
   });
 
   if (entityState.status === "ambiguous" || entityState.status === "not_found") {
@@ -239,8 +243,10 @@ export const runConversationV2Turn = async (
     const continuationFields = extractContinuationFields(workingState.pendingFlow, input.body);
     const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
     const resolution = await resolvePendingState({
+      userId: input.userId,
       workflow: workingState.pendingFlow.workflow,
-      slotState
+      slotState,
+      recentRefs: workingState.recentRefs
     });
 
     if (resolution.kind === "missing_slots") {
@@ -379,8 +385,10 @@ export const runConversationV2Turn = async (
 
   const initialSlotState = buildInitialSlotState(intentResolution.intent as WorkflowIntent);
   const resolution = await resolvePendingState({
+    userId: input.userId,
     workflow: intentResolution.intent.workflow,
-    slotState: initialSlotState
+    slotState: initialSlotState,
+    recentRefs: workingState.recentRefs
   });
 
   if (resolution.kind === "missing_slots") {
