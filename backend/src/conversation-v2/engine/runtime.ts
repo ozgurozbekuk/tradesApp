@@ -32,6 +32,7 @@ import { decideTopicShift } from "../topic/topic-shift";
 
 export type ConversationV2RuntimeDependencies = {
   stateStore: ConversationStateStore;
+  services?: import("../adapters/services").ConversationV2Services;
 };
 
 type PendingResolution =
@@ -325,8 +326,11 @@ export const runConversationV2Turn = async (
     }
 
     const executionResult = await executeWorkflowAction({
+      userId: input.userId,
       workflow: workingState.pendingFlow.workflow,
-      slots: resolution.slotState.slots
+      slots: resolution.slotState.slots,
+      entityState: resolution.entityState,
+      services: dependencies.services
     });
 
     if (executionResult.completed) {
@@ -464,8 +468,11 @@ export const runConversationV2Turn = async (
   }
 
   const executionResult = await executeWorkflowAction({
+    userId: input.userId,
     workflow: intentResolution.intent.workflow,
-    slots: resolution.slotState.slots
+    slots: resolution.slotState.slots,
+    entityState: resolution.entityState,
+    services: dependencies.services
   });
 
   if (!executionResult.completed) {
