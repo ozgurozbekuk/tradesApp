@@ -253,7 +253,11 @@ export const runConversationV2Turn = async (
     });
 
     if (resolution.kind === "missing_slots") {
-      const prompt = buildMissingSlotPrompt(workingState.pendingFlow.workflow, resolution.slotState.missingSlots);
+      const prompt = buildMissingSlotPrompt({
+        workflow: workingState.pendingFlow.workflow,
+        missingSlots: resolution.slotState.missingSlots,
+        validationErrors: resolution.slotState.validationErrors
+      });
       const pendingFlow = buildPendingFlow({
         workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
@@ -277,7 +281,10 @@ export const runConversationV2Turn = async (
     }
 
     if (resolution.kind === "entity_clarification") {
-      const prompt = buildEntityClarificationReply();
+      const prompt = buildEntityClarificationReply({
+        workflow: workingState.pendingFlow.workflow,
+        entityState: resolution.entityState
+      });
       const pendingFlow = buildPendingFlow({
         workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
@@ -301,7 +308,7 @@ export const runConversationV2Turn = async (
     }
 
     if (resolution.kind === "confirmation") {
-      const prompt = buildConfirmationReply(resolution.confirmationState.prompt);
+      const prompt = buildConfirmationReply(resolution.confirmationState);
       const pendingFlow = buildPendingFlow({
         workflow: workingState.pendingFlow.workflow,
         slotState: resolution.slotState,
@@ -398,7 +405,11 @@ export const runConversationV2Turn = async (
   });
 
   if (resolution.kind === "missing_slots") {
-    const prompt = buildMissingSlotPrompt(intentResolution.intent.workflow, resolution.slotState.missingSlots);
+    const prompt = buildMissingSlotPrompt({
+      workflow: intentResolution.intent.workflow,
+      missingSlots: resolution.slotState.missingSlots,
+      validationErrors: resolution.slotState.validationErrors
+    });
     const pendingFlow = buildPendingFlow({
       workflow: intentResolution.intent.workflow,
       slotState: resolution.slotState,
@@ -421,7 +432,10 @@ export const runConversationV2Turn = async (
   }
 
   if (resolution.kind === "entity_clarification") {
-    const prompt = buildEntityClarificationReply();
+    const prompt = buildEntityClarificationReply({
+      workflow: intentResolution.intent.workflow,
+      entityState: resolution.entityState
+    });
     const pendingFlow = buildPendingFlow({
       workflow: intentResolution.intent.workflow,
       slotState: resolution.slotState,
@@ -444,7 +458,7 @@ export const runConversationV2Turn = async (
   }
 
   if (resolution.kind === "confirmation") {
-    const prompt = buildConfirmationReply(resolution.confirmationState.prompt);
+    const prompt = buildConfirmationReply(resolution.confirmationState);
     const pendingFlow = buildPendingFlow({
       workflow: intentResolution.intent.workflow,
       slotState: resolution.slotState,
