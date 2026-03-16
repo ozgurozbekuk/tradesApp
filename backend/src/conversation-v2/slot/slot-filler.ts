@@ -1,4 +1,5 @@
 import type { PendingFlow, WorkflowIntent, WorkflowName } from "../engine/contracts";
+import { workflowSlotsSchemaMap } from "../state/state-schema";
 
 const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   create_customer: ["customer_name"],
@@ -12,10 +13,23 @@ const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   monthly_summary: []
 };
 
+const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
+  create_customer: ["customer_name", "customer_phone", "notes"],
+  record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
+  record_vendor_payment: ["vendor_query", "amount_pence", "note", "occurred_on"],
+  create_job: ["customer_query", "title", "total_pence", "deposit_pence", "due_date", "notes"],
+  update_job_status: ["job_query", "status"],
+  list_today_jobs: ["scope"],
+  record_expense: ["amount_pence", "category", "note", "occurred_on", "vendor_query"],
+  daily_summary: ["scope"],
+  monthly_summary: ["month", "year"]
+};
+
 export type SlotFillResult = {
   workflow: WorkflowName;
   slots: Record<string, unknown>;
   missingSlots: string[];
+  validationErrors: string[];
 };
 
 const hasValue = (value: unknown) => {
@@ -90,29 +104,63 @@ const parseContinuationValue = (slot: string, text: string): unknown => {
   }
 };
 
+const filterWorkflowFields = (workflow: WorkflowName, fields: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(fields).filter(([key, value]) => WORKFLOW_SLOT_KEYS[workflow].includes(key) && hasValue(value))
+  );
+
 const computeMissingSlots = (workflow: WorkflowName, slots: Record<string, unknown>) =>
   REQUIRED_SLOTS[workflow].filter((slot) => !hasValue(slots[slot]));
 
-export const buildInitialSlotState = (intent: WorkflowIntent): SlotFillResult => ({
-  workflow: intent.workflow,
-  slots: { ...intent.fields },
-  missingSlots: computeMissingSlots(intent.workflow, intent.fields as Record<string, unknown>)
-});
+const validateWorkflowSlots = (workflow: WorkflowName, slots: Record<string, unknown>) => {
+  const schema = workflowSlotsSchemaMap[workflow];
+  const validation = schema.safeParse(slots);
+
+  if (validation.success) {
+    return {
+      slots: validation.data as Record<string, unknown>,
+      validationErrors: [] as string[]
+    };
+  }
+
+  return {
+    slots,
+    validationErrors: validation.error.issues.map((issue) => issue.message)
+  };
+};
+
+const buildSlotFillResult = (workflow: WorkflowName, slots: Record<string, unknown>): SlotFillResult => {
+  const filteredSlots = filterWorkflowFields(workflow, slots);
+  const validated = validateWorkflowSlots(workflow, filteredSlots);
+
+  return {
+    workflow,
+    slots: validated.slots,
+    missingSlots: computeMissingSlots(workflow, validated.slots),
+    validationErrors: validated.validationErrors
+  };
+};
+
+export const buildInitialSlotState = (intent: WorkflowIntent): SlotFillResult => {
+  return buildSlotFillResult(intent.workflow, intent.fields as Record<string, unknown>);
+};
 
 export const mergePendingFlowSlots = (
   pendingFlow: PendingFlow,
   fields: Record<string, unknown>
 ): SlotFillResult => {
-  const slots = {
-    ...(pendingFlow.slots as Record<string, unknown>),
-    ...fields
+  const nextFields = filterWorkflowFields(pendingFlow.workflow, fields);
+  const mergedIntoMissingOnly = {
+    ...(pendingFlow.slots as Record<string, unknown>)
   };
 
-  return {
-    workflow: pendingFlow.workflow,
-    slots,
-    missingSlots: computeMissingSlots(pendingFlow.workflow, slots)
-  };
+  for (const missingSlot of pendingFlow.missingSlots) {
+    if (hasValue(nextFields[missingSlot])) {
+      mergedIntoMissingOnly[missingSlot] = nextFields[missingSlot];
+    }
+  }
+
+  return buildSlotFillResult(pendingFlow.workflow, mergedIntoMissingOnly);
 };
 
 export const extractContinuationFields = (pendingFlow: PendingFlow, rawText: string): Record<string, unknown> => {

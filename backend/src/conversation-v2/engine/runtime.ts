@@ -133,6 +133,13 @@ const resolvePendingState = async (input: {
     };
   }
 
+  if (input.slotState.validationErrors.length > 0) {
+    return {
+      kind: "missing_slots",
+      slotState: input.slotState
+    };
+  }
+
   const entityState = await resolveWorkflowEntities({
     workflow: input.workflow,
     slots: input.slotState.slots
