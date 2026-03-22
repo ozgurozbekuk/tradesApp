@@ -19,6 +19,11 @@ const parseMoneyToPence = (text: string) => {
   return Math.round(value * 100);
 };
 
+const extractPaymentMethod = (text: string) => {
+  const match = text.match(/\b(cash|bank|card)\b/i);
+  return match?.[1]?.toLowerCase() as "cash" | "bank" | "card" | undefined;
+};
+
 const monthNameToNumber = (value: string) => {
   const normalized = value.trim().toLowerCase();
   const months = [
@@ -93,6 +98,16 @@ const extractMonthYear = (text: string) => {
   return {};
 };
 
+const extractDays = (text: string) => {
+  const match = text.match(/\b(?:last|past|for)?\s*(\d{1,3})\s*d(?:ays?)?\b/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(match[1], 10);
+  return Number.isNaN(value) ? undefined : value;
+};
+
 const buildIntent = <TWorkflow extends WorkflowName>(
   workflow: TWorkflow,
   confidence: WorkflowIntent["confidence"],
@@ -124,6 +139,166 @@ const resolveCreateCustomerIntent = (text: string): IntentResolutionResult | nul
     customer_name: name || undefined,
     customer_phone: phone
   });
+};
+
+const resolveCustomerRecordsIntent = (text: string): IntentResolutionResult | null => {
+  const match =
+    text.match(/^(?:bring|show|get|find|open)\s+(.+?)\s+(?:records|account|details)$/i) ??
+    text.match(/^(?:customer\s+)?records(?:\s+for)?\s*[:=]?\s*(.+)$/i) ??
+    text.match(/^account(?:\s+for)?\s+(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const customerQuery = match[1]?.trim();
+  if (!customerQuery || /\b(all|everything|all records)\b/i.test(customerQuery)) {
+    return null;
+  }
+
+  return buildIntent("customer_records", "high", {
+    customer_query: customerQuery
+  });
+};
+
+const resolveCustomerPaymentIntent = (text: string): IntentResolutionResult | null => {
+  const match =
+    text.match(/^(?:record|add|log)\s+payment\s+(?:from\s+)?(.+?)\s+£?(-?\d+(?:\.\d{1,2})?)(?:\s+for\s+(.+))?(?:\s+(.+))?$/i) ??
+    text.match(/^(.+?)\s+paid\s+£?(-?\d+(?:\.\d{1,2})?)(?:\s+for\s+(.+))?(?:\s+(.+))?$/i) ??
+    text.match(/^(?:received)\s+£?(-?\d+(?:\.\d{1,2})?)\s+from\s+(.+?)(?:\s+for\s+(.+))?(?:\s+(.+))?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const customerQuery = match[2] ? match[1].trim() : match[2]?.trim();
+  const amountText = match[2] ? match[2] : match[1];
+  const jobQuery = match[3]?.trim();
+  const note = match[4]?.trim();
+
+  return buildIntent("record_customer_payment", "high", {
+    customer_query: customerQuery,
+    amount_pence: parseMoneyToPence(amountText),
+    method: extractPaymentMethod(text),
+    note,
+    job_query: jobQuery || undefined
+  });
+};
+
+const resolveExpenseListIntent = (text: string): IntentResolutionResult | null => {
+  if (
+    !/^(?:bring|show|get|list)\s+(?:my\s+)?(?:expense|expenses|spend|spending)(?:\s+list)?$/i.test(text) &&
+    !/^expenses?\s+(?:today|yesterday)$/i.test(text) &&
+    !/^show\s+this\s+week'?s\s+expenses$/i.test(text)
+  ) {
+    return null;
+  }
+
+  const normalized = text.toLowerCase();
+  const range =
+    normalized.includes("today") ? "today" : normalized.includes("yesterday") ? "yesterday" : normalized.includes("week") ? "week" : "all";
+
+  return buildIntent("expense_list", "high", {
+    range
+  });
+};
+
+const resolveVendorSummaryIntent = (text: string): IntentResolutionResult | null => {
+  if (!/\bvendor\s+summary\b/i.test(text) && !/\bsupplier\s+summary\b/i.test(text)) {
+    return null;
+  }
+
+  return buildIntent("vendor_summary", "high", {
+    days: extractDays(text)
+  });
+};
+
+const resolveExpensePdfIntent = (text: string): IntentResolutionResult | null => {
+  if (
+    /^(?:bring|send|export|get|show)\s+(?:my\s+)?(?:expense|expenses|spend|spending)\s+(?:record|records)(?:\s+as\s+(?:a\s+)?pdf)?$/i.test(text) ||
+    /^(?:expense|expenses)\s+pdf$/i.test(text)
+  ) {
+    return buildIntent("export_expense_pdf", "high", {});
+  }
+
+  return null;
+};
+
+const resolveVendorPdfIntent = (text: string): IntentResolutionResult | null => {
+  const match = text.match(
+    /^(?:send|export|show)\s+(?:(.+?)\s+)?(?:supplier|vendor)\s+(?:payments|debts|records|expenses)\s+as\s+pdf$/i
+  );
+  if (!match) {
+    return null;
+  }
+
+  return buildIntent("export_vendor_pdf", "high", {
+    vendor_query: match[1]?.trim() || undefined
+  });
+};
+
+const resolveRecordsPdfIntent = (text: string): IntentResolutionResult | null => {
+  const specificMatch =
+    text.match(/^(?:bring|send|export|get)\s+(.+?)\s+records(?:\s+as\s+(?:a\s+)?pdf)?$/i) ??
+    text.match(/^(?:export|pdf|send)\s+(?:customer\s+)?records(?:\s+for)?\s*[:=]?\s*(.+)$/i);
+  if (specificMatch) {
+    const customerQuery = specificMatch[1].trim();
+    if (!/\b(all|everything|all records)\b/i.test(customerQuery)) {
+      return buildIntent("export_records_pdf", "high", {
+        customer_query: customerQuery
+      });
+    }
+  }
+
+  if (
+    /^(?:export|pdf|send)\s+all\s+records(?:\s+pdf)?$/i.test(text) ||
+    /^(?:bring|send)\s+my\s+records$/i.test(text) ||
+    /^(?:bring|send)\s+all\s+records(?:\s+pdf)?$/i.test(text)
+  ) {
+    return buildIntent("export_records_pdf", "high", {});
+  }
+
+  return null;
+};
+
+const resolveCreateInvoiceIntent = (text: string): IntentResolutionResult | null => {
+  const match =
+    text.match(/^(?:create|make|generate)\s+(.+?)\s+invoice$/i) ??
+    text.match(/^invoice\s+(.+?)\s+for\s+(.+)$/i) ??
+    text.match(/^(?:create|make|generate|send|show|raise|draft)(?:\s+me)?\s+(?:an?\s+)?invoice\s+(?:for\s+)?(.+)$/i);
+  if (match) {
+    const customerQuery =
+      match.length >= 3 ? match[1].trim().replace(/'s$/i, "").trim() : match[1].trim().replace(/'s$/i, "").trim();
+    return buildIntent("create_invoice", "high", {
+      customer_query: customerQuery || undefined
+    });
+  }
+
+  if (/^(?:create|make|generate|send|show)\s+invoice$/i.test(text)) {
+    return buildIntent("create_invoice", "medium", {});
+  }
+
+  return null;
+};
+
+const resolvePartialCustomerPaymentIntent = (text: string): IntentResolutionResult | null => {
+  const customerOnly =
+    text.match(/^(?:record|add|log)\s+payment\s+(?:from\s+)?(.+)$/i) ??
+    text.match(/^(.+?)\s+paid$/i);
+  if (customerOnly) {
+    return buildIntent("record_customer_payment", "medium", {
+      customer_query: customerOnly[1].trim(),
+      method: extractPaymentMethod(text)
+    });
+  }
+
+  const amountOnly = text.match(/^(?:record|add|log)\s+payment\s+£?(-?\d+(?:\.\d{1,2})?)$/i);
+  if (amountOnly) {
+    return buildIntent("record_customer_payment", "medium", {
+      amount_pence: parseMoneyToPence(amountOnly[1]),
+      method: extractPaymentMethod(text)
+    });
+  }
+
+  return null;
 };
 
 const resolveListTodayJobsIntent = (text: string): IntentResolutionResult | null => {
@@ -346,6 +521,14 @@ const resolvePartialExpenseIntent = (text: string): IntentResolutionResult | nul
 
 const resolveHighConfidenceIntent = (text: string): IntentResolutionResult | null => {
   return (
+    resolveCustomerRecordsIntent(text) ??
+    resolveCustomerPaymentIntent(text) ??
+    resolveExpenseListIntent(text) ??
+    resolveVendorSummaryIntent(text) ??
+    resolveExpensePdfIntent(text) ??
+    resolveVendorPdfIntent(text) ??
+    resolveRecordsPdfIntent(text) ??
+    resolveCreateInvoiceIntent(text) ??
     resolveListTodayJobsIntent(text) ??
     resolveDailySummaryIntent(text) ??
     resolveMonthlySummaryIntent(text) ??
@@ -378,6 +561,28 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
     return buildIntent("record_expense", "medium", {});
   }
 
+  if (/^(?:bring|show|get|list)\s+(?:my\s+)?(?:expense|expenses|spend|spending)\b/i.test(text)) {
+    return buildIntent("expense_list", "medium", {});
+  }
+
+  if (/^(?:expense|expenses)\s+pdf$/i.test(text)) {
+    return buildIntent("export_expense_pdf", "medium", {});
+  }
+
+  if (/\b(?:vendor|supplier)\b.*\bpdf\b/i.test(text)) {
+    return buildIntent("export_vendor_pdf", "medium", {});
+  }
+
+  if (/\brecords\b.*\bpdf\b/i.test(text) || /\bmy records\b/i.test(text)) {
+    return buildIntent("export_records_pdf", "medium", {});
+  }
+
+  if (/\bvendor\s+summary\b/i.test(text) || /\bsupplier\s+summary\b/i.test(text)) {
+    return buildIntent("vendor_summary", "medium", {
+      days: extractDays(text)
+    });
+  }
+
   if (/^(?:record|add|log)\s+expense\b/i.test(text)) {
     return resolvePartialExpenseIntent(text);
   }
@@ -388,6 +593,10 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (/^(?:record|add|log)\s+vendor\s+payment\b/i.test(text) || /^(?:pay|paid)\b/i.test(text)) {
     return resolvePartialVendorPaymentIntent(text);
+  }
+
+  if (/^(?:record|add|log)\s+payment\b/i.test(text) || /.+\s+paid(?:\s+£|\s+\d)/i.test(text)) {
+    return resolvePartialCustomerPaymentIntent(text);
   }
 
   if (/^(?:create|add|new)\s+job\b/i.test(text)) {

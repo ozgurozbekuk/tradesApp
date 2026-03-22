@@ -27,6 +27,119 @@
     }
   },
   {
+    "name": "messy labeled create job",
+    "input": "add new job, customer: john doe, price : 300, deposit 50, due date: tomorrow",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "john doe",
+        "title": "new job",
+        "total_pence": 30000,
+        "deposit_pence": 5000,
+        "due_date": "tomorrow"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "fresh",
+      "fields": {
+        "customer_query": "john doe",
+        "title": "new job",
+        "total_pence": 30000
+      }
+    }
+  },
+  {
+    "name": "customer records lookup",
+    "input": "bring john records",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "customer_records",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "john"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "customer_records",
+      "mode": "fresh",
+      "fields": {
+        "customer_query": "john"
+      }
+    }
+  },
+  {
+    "name": "customer payment logging",
+    "input": "john paid 250",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "record_customer_payment",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "john",
+        "amount_pence": 25000
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "record_customer_payment",
+      "mode": "fresh",
+      "fields": {
+        "customer_query": "john",
+        "amount_pence": 25000
+      }
+    }
+  },
+  {
+    "name": "expense list",
+    "input": "show my expenses",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "expense_list",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "range": "all"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "expense_list",
+      "mode": "fresh",
+      "fields": {
+        "range": "all"
+      }
+    }
+  },
+  {
+    "name": "vendor summary",
+    "input": "vendor summary",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "vendor_summary",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "days": 30
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "vendor_summary",
+      "mode": "fresh",
+      "fields": {
+        "days": 30
+      }
+    }
+  },
+  {
     "name": "casual create customer",
     "input": "stick this down as customer Jack Turner 07000123456",
     "mock_output": {
@@ -80,27 +193,151 @@
     }
   },
   {
-    "name": "export delegates to v1",
-    "input": "send me john's records as pdf",
+    "name": "pending follow-up due date phrase",
+    "input": "due date: end of month",
+    "pending_flow": {
+      "workflow": "create_job",
+      "step": "slot_filling",
+      "slots": {
+        "customer_query": "john",
+        "title": "home cleaning",
+        "total_pence": 50000
+      },
+      "missingSlots": ["due_date"],
+      "prompt": "What is the due date?"
+    },
     "mock_output": {
-      "kind": "delegate_to_v1",
-      "capability": "export_pdf"
+      "kind": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "confidence": "high",
+      "fields": {
+        "due_date": "end of month"
+      }
     },
     "expected": {
-      "type": "delegate_to_v1",
-      "capability": "export_pdf"
+      "type": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "fields": {
+        "due_date": "end of month"
+      }
     }
   },
   {
-    "name": "vendor summary delegates to v1",
-    "input": "show me vendor summary for this month",
+    "name": "ambiguity clarification for duplicate customer",
+    "input": "it was for john",
+    "pending_flow": {
+      "workflow": "create_job",
+      "step": "entity_resolution",
+      "slots": {
+        "customer_query": "john",
+        "title": "new job",
+        "total_pence": 30000
+      },
+      "missingSlots": [],
+      "prompt": "I found more than one match. Reply with a number."
+    },
     "mock_output": {
-      "kind": "delegate_to_v1",
-      "capability": "vendor_summary"
+      "kind": "clarification",
+      "question": "I found more than one John. Please reply with 1 or 2.",
+      "workflow": "create_job",
+      "missing_fields": ["customer_query"]
     },
     "expected": {
-      "type": "delegate_to_v1",
-      "capability": "vendor_summary"
+      "type": "clarification",
+      "question": "I found more than one John. Please reply with 1 or 2.",
+      "workflow": "create_job",
+      "missingFields": ["customer_query"]
+    }
+  },
+  {
+    "name": "ordinal candidate selection",
+    "input": "first",
+    "pending_flow": {
+      "workflow": "create_job",
+      "step": "entity_resolution",
+      "slots": {
+        "customer_query": "john"
+      },
+      "missingSlots": [],
+      "prompt": "I found more than one match. Reply with a number."
+    },
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "first"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_job",
+      "mode": "continue_pending",
+      "fields": {
+        "customer_query": "first"
+      }
+    }
+  },
+  {
+    "name": "records pdf export",
+    "input": "send me john's records as pdf",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "export_records_pdf",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "john"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "export_records_pdf",
+      "mode": "fresh",
+      "fields": {
+        "customer_query": "john"
+      }
+    }
+  },
+  {
+    "name": "expense pdf export",
+    "input": "expenses pdf",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "export_expense_pdf",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {}
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "export_expense_pdf",
+      "mode": "fresh",
+      "fields": {}
+    }
+  },
+  {
+    "name": "invoice pdf create",
+    "input": "create john invoice",
+    "mock_output": {
+      "kind": "workflow_intent",
+      "workflow": "create_invoice",
+      "mode": "fresh",
+      "confidence": "high",
+      "fields": {
+        "customer_query": "john"
+      }
+    },
+    "expected": {
+      "type": "workflow_intent",
+      "workflow": "create_invoice",
+      "mode": "fresh",
+      "fields": {
+        "customer_query": "john"
+      }
     }
   },
   {

@@ -51,7 +51,7 @@ test("semantic delegate schema accepts explicit V1 delegation", async () => {
 
   const parsed = semanticFrontDoorResultSchema.parse({
     kind: "delegate_to_v1",
-    capability: "export_pdf"
+    capability: "booking_create"
   });
 
   assert.equal(parsed.kind, "delegate_to_v1");
@@ -59,7 +59,7 @@ test("semantic delegate schema accepts explicit V1 delegation", async () => {
     return;
   }
 
-  assert.equal(parsed.capability, "export_pdf");
+  assert.equal(parsed.capability, "booking_create");
 });
 
 test("semantic workflow intent schema rejects unknown fields", async () => {

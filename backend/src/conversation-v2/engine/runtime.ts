@@ -14,6 +14,7 @@ import type { ConversationV2SemanticLlmCaller } from "../semantic/interpreter";
 import { interpretConversationV2Semantically } from "../semantic/interpreter";
 import { normalizeSemanticFrontDoorResult } from "../semantic/normalizer";
 import { resolveWorkflowConfirmation } from "../confirmation/confirmation-handler";
+import { resolveAmbiguousEntitySelection } from "../entity/disambiguation";
 import { resolveWorkflowEntities } from "../entity/entity-resolver";
 import { executeWorkflowAction } from "../execution/action-executor";
 import { resolveIntentV2 } from "../intent/intent-resolver";
@@ -35,6 +36,7 @@ import {
 } from "../slot/slot-filler";
 import { createEmptyConversationStateV2, type ConversationStateStore } from "../state/state-store";
 import { decideTopicShift } from "../topic/topic-shift";
+import { workflowIntentSchema } from "../intent/intent-schema";
 
 export type ConversationV2RuntimeDependencies = {
   stateStore: ConversationStateStore;
@@ -210,18 +212,31 @@ const saveAndReturn = async (input: {
   stateStore: ConversationStateStore;
   state: ConversationStateV2;
   reply: string;
+  mediaUrl?: string;
   workflow?: WorkflowName;
   status: RouteIncomingMessageV2Result["status"];
+  fallbackToV1?: boolean;
+  delegatedCapability?: RouteIncomingMessageV2Result["delegatedCapability"];
 }): Promise<RouteIncomingMessageV2Result> => {
   await input.stateStore.save(input.state);
 
   return {
     reply: input.reply,
+    mediaUrl: input.mediaUrl,
     state: input.state,
     workflow: input.workflow,
-    status: input.status
+    status: input.status,
+    fallbackToV1: input.fallbackToV1,
+    delegatedCapability: input.delegatedCapability
   };
 };
+
+const buildEmptyWorkflowIntent = (workflow: WorkflowName): WorkflowIntent =>
+  workflowIntentSchema.parse({
+    workflow,
+    confidence: "low",
+    fields: {}
+  });
 
 const resolveSemanticNormalizedTurn = async (input: {
   userId: string;
@@ -346,6 +361,7 @@ export const runConversationV2Turn = async (
               lastCompletedWorkflow: executionResult.workflow
             },
             reply: buildWorkflowReply(executionResult),
+            mediaUrl: executionResult.mediaUrl,
             workflow: executionResult.workflow,
             status: "completed"
           });
@@ -367,6 +383,76 @@ export const runConversationV2Turn = async (
         workflow: workingState.pendingFlow.workflow,
         status: "pending"
       });
+    }
+
+    if (workingState.pendingFlow.step === "entity_resolution" && workingState.pendingFlow.entityState.status === "ambiguous") {
+      const selectedEntityState = resolveAmbiguousEntitySelection(workingState.pendingFlow.entityState, input.body);
+
+      if (selectedEntityState?.status === "resolved") {
+        const confirmation = await resolveWorkflowConfirmation({
+          userId: input.userId,
+          workflow: workingState.pendingFlow.workflow,
+          slots: workingState.pendingFlow.slots,
+          entityState: selectedEntityState
+        });
+
+        if (confirmation.type === "required") {
+          const prompt = buildConfirmationReply(confirmation.confirmation);
+          const pendingFlow = buildPendingFlow({
+            workflow: workingState.pendingFlow.workflow,
+            slotState: {
+              workflow: workingState.pendingFlow.workflow,
+              slots: workingState.pendingFlow.slots,
+              missingSlots: workingState.pendingFlow.missingSlots,
+              validationErrors: []
+            },
+            entityState: selectedEntityState,
+            confirmationState: confirmation.confirmation,
+            previous: workingState.pendingFlow,
+            now,
+            sourceMessageId: input.messageSid,
+            prompt
+          });
+
+          return saveAndReturn({
+            stateStore: dependencies.stateStore,
+            state: {
+              ...workingState,
+              pendingFlow
+            },
+            reply: prompt,
+            workflow: pendingFlow.workflow,
+            status: "pending"
+          });
+        }
+
+        const executionResult = await executeWorkflowAction({
+          userId: input.userId,
+          workflow: workingState.pendingFlow.workflow,
+          slots: workingState.pendingFlow.slots,
+          entityState: selectedEntityState,
+          services: dependencies.services
+        });
+
+        if (executionResult.completed) {
+          return saveAndReturn({
+            stateStore: dependencies.stateStore,
+            state: {
+              ...workingState,
+              recentRefs: {
+                ...workingState.recentRefs,
+                ...executionResult.recentRefs
+              },
+              pendingFlow: undefined,
+              lastCompletedWorkflow: executionResult.workflow
+            },
+            reply: buildWorkflowReply(executionResult),
+            mediaUrl: executionResult.mediaUrl,
+            workflow: executionResult.workflow,
+            status: "completed"
+          });
+        }
+      }
     }
 
     const semanticPendingTurn = await resolveSemanticNormalizedTurn({
@@ -533,6 +619,7 @@ export const runConversationV2Turn = async (
           lastCompletedWorkflow: executionResult.workflow
         },
         reply: buildWorkflowReply(executionResult),
+        mediaUrl: executionResult.mediaUrl,
         workflow: executionResult.workflow,
         status: "completed"
       });
@@ -590,7 +677,52 @@ export const runConversationV2Turn = async (
       stateStore: dependencies.stateStore,
       state: workingState,
       reply: buildUnsupportedReply(),
-      status: "unsupported"
+      status: "unsupported",
+      fallbackToV1: true,
+      delegatedCapability: semanticFreshTurn.capability
+    });
+  }
+
+  if (semanticFreshTurn?.type === "clarification") {
+    emitConversationV2Event("conversation_v2.semantic.fresh_clarification", {
+      userId: input.userId,
+      workflow: semanticFreshTurn.workflow,
+      missingFields: semanticFreshTurn.missingFields
+    });
+
+    if (!semanticFreshTurn.workflow) {
+      return saveAndReturn({
+        stateStore: dependencies.stateStore,
+        state: workingState,
+        reply: semanticFreshTurn.question,
+        status: "pending"
+      });
+    }
+
+    const emptyIntent = buildEmptyWorkflowIntent(semanticFreshTurn.workflow);
+    const initialSlotState = buildInitialSlotState(emptyIntent);
+    const slotState = {
+      ...initialSlotState,
+      missingSlots: semanticFreshTurn.missingFields ?? initialSlotState.missingSlots
+    };
+    const pendingFlow = buildPendingFlow({
+      workflow: semanticFreshTurn.workflow,
+      slotState,
+      entityState: { status: "idle" },
+      now,
+      sourceMessageId: input.messageSid,
+      prompt: semanticFreshTurn.question
+    });
+
+    return saveAndReturn({
+      stateStore: dependencies.stateStore,
+      state: {
+        ...workingState,
+        pendingFlow
+      },
+      reply: semanticFreshTurn.question,
+      workflow: pendingFlow.workflow,
+      status: "pending"
     });
   }
 
@@ -750,6 +882,7 @@ export const runConversationV2Turn = async (
       lastCompletedWorkflow: executionResult.workflow
     },
     reply: buildWorkflowReply(executionResult),
+    mediaUrl: executionResult.mediaUrl,
     workflow: executionResult.workflow,
     status: "completed"
   });

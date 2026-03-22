@@ -103,13 +103,54 @@ test("conversation v2 router falls back to v1 for fresh unsupported turns", asyn
           recentRefs: {},
           version: "v2"
         },
-        status: "unsupported"
+        status: "unsupported",
+        fallbackToV1: true,
+        delegatedCapability: "unknown_v1_capability"
       })
     }
   );
 
   assert.equal(result.source, "v1");
   assert.equal(result.reply, "v1 fallback reply");
+});
+
+test("conversation v2 router keeps unsupported turns on v2 when no explicit v1 delegation was requested", async () => {
+  ensureEnv();
+  process.env.USE_CONVERSATION_V2 = "true";
+  process.env.CONVERSATION_V2_TEST_PHONES = "";
+
+  const { routeIncomingMessageWithConversationV2 } = await import("../src/conversation-v2/router");
+  const stateStore = createInMemoryConversationStateStore();
+
+  const result = await routeIncomingMessageWithConversationV2(
+    {
+      from: "+447000000030",
+      body: "some unsupported phrasing",
+      messageSid: "MSG-30"
+    },
+    {
+      stateStore,
+      usersService: {
+        findByPhone: async () => ({ id: "user-30", phone: "+447000000030" })
+      },
+      routeV1: async () => ({ reply: "v1 fallback reply" }),
+      routeV2: async () => ({
+        reply: "unsupported",
+        state: {
+          userId: "user-30",
+          channel: "whatsapp",
+          lastMessageAt: new Date().toISOString(),
+          recentRefs: {},
+          version: "v2"
+        },
+        status: "unsupported"
+      })
+    }
+  );
+
+  assert.equal(result.source, "v2");
+  assert.equal(result.reply, "unsupported");
+  assert.equal(result.v2Status, "unsupported");
 });
 
 test("conversation v2 router keeps pending users on v2 even when the current turn is unsupported", async () => {

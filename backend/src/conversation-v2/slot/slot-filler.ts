@@ -1,7 +1,16 @@
 import type { PendingFlow, WorkflowIntent, WorkflowName } from "../engine/contracts";
+import { parseConversationDate } from "../date-parsing";
 import { workflowSlotsSchemaMap } from "../state/state-schema";
 
 const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
+  customer_records: ["customer_query"],
+  record_customer_payment: ["customer_query", "amount_pence"],
+  expense_list: [],
+  vendor_summary: [],
+  export_records_pdf: [],
+  export_vendor_pdf: [],
+  export_expense_pdf: [],
+  create_invoice: [],
   create_customer: ["customer_name"],
   record_vendor_debt: ["amount_pence", "vendor_query"],
   record_vendor_payment: ["amount_pence", "vendor_query"],
@@ -13,31 +22,15 @@ const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   monthly_summary: []
 };
 
-const parseDueDate = (value: string) => {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return undefined;
-  }
-
-  if (normalized === "today") {
-    return new Date();
-  }
-
-  if (normalized === "tomorrow") {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow;
-  }
-
-  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(normalized)) {
-    return undefined;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-};
-
 const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
+  customer_records: ["customer_query"],
+  record_customer_payment: ["customer_query", "amount_pence", "method", "note", "job_query"],
+  expense_list: ["range"],
+  vendor_summary: ["days"],
+  export_records_pdf: ["customer_query"],
+  export_vendor_pdf: ["vendor_query"],
+  export_expense_pdf: [],
+  create_invoice: ["customer_query"],
   create_customer: ["customer_name", "customer_phone", "notes"],
   record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
   record_vendor_payment: ["vendor_query", "amount_pence", "note", "occurred_on"],
@@ -97,6 +90,15 @@ const parseYear = (text: string) => {
   return value;
 };
 
+const parseDays = (text: string) => {
+  const value = Number.parseInt(text.trim(), 10);
+  if (Number.isNaN(value) || value <= 0 || value > 365) {
+    return undefined;
+  }
+
+  return value;
+};
+
 const parseContinuationValue = (slot: string, text: string): unknown => {
   switch (slot) {
     case "amount_pence":
@@ -115,9 +117,27 @@ const parseContinuationValue = (slot: string, text: string): unknown => {
 
       return undefined;
     }
+    case "method": {
+      const normalized = text.trim().toLowerCase();
+      if (normalized === "cash" || normalized === "bank" || normalized === "card" || normalized === "unknown") {
+        return normalized;
+      }
+
+      return undefined;
+    }
+    case "days":
+      return parseDays(text);
     case "scope": {
       const normalized = text.trim().toLowerCase();
       if (normalized === "today" || normalized === "daily") {
+        return normalized;
+      }
+
+      return undefined;
+    }
+    case "range": {
+      const normalized = text.trim().toLowerCase();
+      if (normalized === "today" || normalized === "yesterday" || normalized === "week" || normalized === "all") {
         return normalized;
       }
 
@@ -144,7 +164,7 @@ const validateWorkflowSlots = (workflow: WorkflowName, slots: Record<string, unk
     const validationErrors: string[] = [];
     const validatedSlots = validation.data as Record<string, unknown>;
     if (workflow === "create_job" && typeof validatedSlots.due_date === "string") {
-      if (!parseDueDate(validatedSlots.due_date)) {
+      if (!parseConversationDate(validatedSlots.due_date)) {
         validationErrors.push("I could not understand that due date. Please use a clear date like 2026-03-20 or say tomorrow.");
       }
     }

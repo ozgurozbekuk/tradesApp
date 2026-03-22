@@ -31,6 +31,16 @@ export const resolveWorkflowConfirmation = async (input: {
   entityState: EntityResolutionResult;
 }): Promise<ConfirmationDecision> => {
   switch (input.workflow) {
+    case "customer_records":
+    case "record_customer_payment":
+    case "expense_list":
+    case "vendor_summary":
+    case "export_records_pdf":
+    case "export_vendor_pdf":
+    case "export_expense_pdf":
+    case "create_invoice":
+      return { type: "none" };
+
     case "create_customer": {
       const customerName =
         typeof input.slots.customer_name === "string" ? input.slots.customer_name.trim() : undefined;

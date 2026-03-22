@@ -13,6 +13,7 @@
     "prisma:generate": "prisma generate --config prisma.config.ts",
     "eval:agent": "node --import tsx scripts/eval/agent-eval.ts",
     "eval:conversation-v2-semantic": "node --import tsx scripts/eval/conversation-v2-semantic-eval.ts",
+    "eval:conversation-v2-semantic:live": "node --import tsx scripts/eval/conversation-v2-semantic-eval.ts --live",
     "eval:learning-export": "node --import tsx scripts/eval/export-learning-eval.ts"
   },
   "keywords": [],

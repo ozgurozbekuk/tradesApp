@@ -1,6 +1,6 @@
 import type { WorkflowIntent, WorkflowName } from "../engine/contracts";
 import { workflowIntentSchema } from "../intent/intent-schema";
-import type { SemanticFrontDoorResultSchema } from "./schema";
+import type { SemanticDelegateCapabilitySchema, SemanticFrontDoorResultSchema } from "./schema";
 
 export type RuntimeNormalizedTurn =
   | {
@@ -18,7 +18,7 @@ export type RuntimeNormalizedTurn =
     }
   | {
       type: "delegate_to_v1";
-      capability: string;
+      capability: SemanticDelegateCapabilitySchema;
       reasoningSummary?: string;
     }
   | {

@@ -26,6 +26,10 @@ type EvalCase = {
   };
 };
 
+const parseArgs = (argv: string[]) => ({
+  live: argv.includes("--live")
+});
+
 const matchesSubset = (expected: Record<string, unknown>, actual: Record<string, unknown>) =>
   Object.entries(expected).every(([key, value]) => actual[key] === value);
 
@@ -38,11 +42,13 @@ process.stdout.on("error", (error: NodeJS.ErrnoException) => {
 });
 
 const run = async () => {
+  const args = parseArgs(process.argv.slice(2));
   const file = path.resolve(process.cwd(), "scripts/eval/conversation-v2-semantic-phase1.json");
   const cases = JSON.parse(fs.readFileSync(file, "utf8")) as EvalCase[];
 
   let passed = 0;
 
+  console.log(`mode\t${args.live ? "live" : "mock"}`);
   console.log("idx\tname\texpected\tactual\tresult");
 
   for (const [index, testCase] of cases.entries()) {
@@ -51,7 +57,7 @@ const run = async () => {
         message: testCase.input,
         pendingFlow: testCase.pending_flow
       },
-      async () => testCase.mock_output
+      args.live ? undefined : async () => testCase.mock_output
     );
 
     const normalized = normalizeSemanticFrontDoorResult(interpreted);

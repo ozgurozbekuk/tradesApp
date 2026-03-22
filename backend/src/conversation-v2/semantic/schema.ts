@@ -1,34 +1,46 @@
 import { z } from "zod";
 import { workflowNameSchema } from "../state/state-schema";
 import {
+  customerRecordsSlotsSchema,
   createCustomerSlotsSchema,
+  createInvoiceSlotsSchema,
   createJobSlotsSchema,
   dailySummarySlotsSchema,
+  expenseListSlotsSchema,
+  exportExpensePdfSlotsSchema,
+  exportRecordsPdfSlotsSchema,
+  exportVendorPdfSlotsSchema,
   listTodayJobsSlotsSchema,
   monthlySummarySlotsSchema,
+  recordCustomerPaymentSlotsSchema,
   recordExpenseSlotsSchema,
   recordVendorDebtSlotsSchema,
   recordVendorPaymentSlotsSchema,
-  updateJobStatusSlotsSchema
+  updateJobStatusSlotsSchema,
+  vendorSummarySlotsSchema
 } from "../state/state-schema";
 
 export const semanticModeSchema = z.enum(["fresh", "continue_pending"]);
 export const semanticConfidenceSchema = z.enum(["high", "medium", "low"]);
 
 export const semanticDelegateCapabilitySchema = z.enum([
-  "customer_lookup",
-  "customer_payment",
   "booking_create",
   "job_list_extended",
-  "expense_list",
-  "vendor_summary",
-  "export_pdf",
-  "invoice_create",
   "briefing_toggle",
   "unknown_v1_capability"
 ]);
 
 const workflowMissingFieldSchemaMap = {
+  customer_records: z.array(z.enum(["customer_query"])).optional(),
+  record_customer_payment: z
+    .array(z.enum(["customer_query", "amount_pence", "method", "note", "job_query"]))
+    .optional(),
+  expense_list: z.array(z.enum(["range"])).optional(),
+  vendor_summary: z.array(z.enum(["days"])).optional(),
+  export_records_pdf: z.array(z.enum(["customer_query"])).optional(),
+  export_vendor_pdf: z.array(z.enum(["vendor_query"])).optional(),
+  export_expense_pdf: z.array(z.never()).optional(),
+  create_invoice: z.array(z.enum(["customer_query"])).optional(),
   create_customer: z.array(z.enum(["customer_name", "customer_phone", "notes"])).optional(),
   record_vendor_debt: z.array(z.enum(["vendor_query", "amount_pence", "note", "occurred_on"])).optional(),
   record_vendor_payment: z.array(z.enum(["vendor_query", "amount_pence", "note", "occurred_on"])).optional(),
@@ -50,6 +62,46 @@ const semanticWorkflowIntentBaseSchema = z.object({
 });
 
 export const semanticWorkflowIntentSchema = z.discriminatedUnion("workflow", [
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("customer_records"),
+    fields: customerRecordsSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.customer_records
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("record_customer_payment"),
+    fields: recordCustomerPaymentSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.record_customer_payment
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("expense_list"),
+    fields: expenseListSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.expense_list
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("vendor_summary"),
+    fields: vendorSummarySlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.vendor_summary
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("export_records_pdf"),
+    fields: exportRecordsPdfSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.export_records_pdf
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("export_vendor_pdf"),
+    fields: exportVendorPdfSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.export_vendor_pdf
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("export_expense_pdf"),
+    fields: exportExpensePdfSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.export_expense_pdf
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("create_invoice"),
+    fields: createInvoiceSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.create_invoice
+  }),
   semanticWorkflowIntentBaseSchema.extend({
     workflow: z.literal("create_customer"),
     fields: createCustomerSlotsSchema,

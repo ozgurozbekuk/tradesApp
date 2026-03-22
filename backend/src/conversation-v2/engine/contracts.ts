@@ -1,4 +1,12 @@
 export const WORKFLOW_NAMES = [
+  "customer_records",
+  "record_customer_payment",
+  "expense_list",
+  "vendor_summary",
+  "export_records_pdf",
+  "export_vendor_pdf",
+  "export_expense_pdf",
+  "create_invoice",
   "create_customer",
   "record_vendor_debt",
   "record_vendor_payment",
@@ -22,6 +30,32 @@ export const PENDING_FLOW_STEPS = [
 export type PendingFlowStep = (typeof PENDING_FLOW_STEPS)[number];
 
 export type WorkflowSlotsByName = {
+  customer_records: {
+    customer_query?: string;
+  };
+  record_customer_payment: {
+    customer_query?: string;
+    amount_pence?: number;
+    method?: "cash" | "bank" | "card" | "unknown";
+    note?: string;
+    job_query?: string;
+  };
+  expense_list: {
+    range?: "today" | "yesterday" | "week" | "all";
+  };
+  vendor_summary: {
+    days?: number;
+  };
+  export_records_pdf: {
+    customer_query?: string;
+  };
+  export_vendor_pdf: {
+    vendor_query?: string;
+  };
+  export_expense_pdf: {};
+  create_invoice: {
+    customer_query?: string;
+  };
   create_customer: {
     customer_name?: string;
     customer_phone?: string;
@@ -104,7 +138,7 @@ export type EntityResolutionResult =
     }
   | {
       status: "ambiguous";
-      resolvedIds?: undefined;
+      resolvedIds?: ResolvedEntityIds;
       candidates: EntityCandidate[];
       unresolvedQuery: string;
     }
@@ -203,11 +237,14 @@ export type RouteIncomingMessageV2Result = {
   state: ConversationStateV2;
   workflow?: WorkflowName;
   status: "completed" | "pending" | "unsupported";
+  fallbackToV1?: boolean;
+  delegatedCapability?: "booking_create" | "job_list_extended" | "briefing_toggle" | "unknown_v1_capability";
 };
 
 export type WorkflowExecutionResult<TWorkflow extends WorkflowName = WorkflowName> = {
   workflow: TWorkflow;
   reply: string;
+  mediaUrl?: string;
   recentRefs?: RecentRefs;
   completed: boolean;
 };

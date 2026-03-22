@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 export const workflowNameSchema = z.enum([
+  "customer_records",
+  "record_customer_payment",
+  "expense_list",
+  "vendor_summary",
+  "export_records_pdf",
+  "export_vendor_pdf",
+  "export_expense_pdf",
+  "create_invoice",
   "create_customer",
   "record_vendor_debt",
   "record_vendor_payment",
@@ -52,6 +60,14 @@ export const entityResolutionResultSchema = z.discriminatedUnion("status", [
   }),
   z.object({
     status: z.literal("ambiguous"),
+    resolvedIds: z
+      .object({
+        customerId: z.string().optional(),
+        vendorId: z.string().optional(),
+        jobId: z.string().optional()
+      })
+      .strict()
+      .optional(),
     candidates: z.array(entityCandidateSchema).min(1),
     unresolvedQuery: z.string()
   }),
@@ -104,6 +120,54 @@ export const createCustomerSlotsSchema = z
         "customer_phone must contain at least 7 digits"
       ),
     notes: z.string().min(1).optional()
+  })
+  .strict();
+
+export const customerRecordsSlotsSchema = z
+  .object({
+    customer_query: z.string().min(1).optional()
+  })
+  .strict();
+
+export const recordCustomerPaymentSlotsSchema = z
+  .object({
+    customer_query: z.string().min(1).optional(),
+    amount_pence: z.number().int().positive("amount_pence must be greater than 0").optional(),
+    method: z.enum(["cash", "bank", "card", "unknown"]).optional(),
+    note: z.string().min(1).optional(),
+    job_query: z.string().min(1).optional()
+  })
+  .strict();
+
+export const expenseListSlotsSchema = z
+  .object({
+    range: z.enum(["today", "yesterday", "week", "all"]).optional()
+  })
+  .strict();
+
+export const vendorSummarySlotsSchema = z
+  .object({
+    days: z.number().int().positive().max(365).optional()
+  })
+  .strict();
+
+export const exportRecordsPdfSlotsSchema = z
+  .object({
+    customer_query: z.string().min(1).optional()
+  })
+  .strict();
+
+export const exportVendorPdfSlotsSchema = z
+  .object({
+    vendor_query: z.string().min(1).optional()
+  })
+  .strict();
+
+export const exportExpensePdfSlotsSchema = z.object({}).strict();
+
+export const createInvoiceSlotsSchema = z
+  .object({
+    customer_query: z.string().min(1).optional()
   })
   .strict();
 
@@ -183,6 +247,14 @@ export const monthlySummarySlotsSchema = z
   .strict();
 
 export const workflowSlotsSchemaMap = {
+  customer_records: customerRecordsSlotsSchema,
+  record_customer_payment: recordCustomerPaymentSlotsSchema,
+  expense_list: expenseListSlotsSchema,
+  vendor_summary: vendorSummarySlotsSchema,
+  export_records_pdf: exportRecordsPdfSlotsSchema,
+  export_vendor_pdf: exportVendorPdfSlotsSchema,
+  export_expense_pdf: exportExpensePdfSlotsSchema,
+  create_invoice: createInvoiceSlotsSchema,
   create_customer: createCustomerSlotsSchema,
   record_vendor_debt: recordVendorDebtSlotsSchema,
   record_vendor_payment: recordVendorPaymentSlotsSchema,
@@ -208,6 +280,46 @@ const pendingFlowBaseSchema = z.object({
 });
 
 export const pendingFlowSchema = z.discriminatedUnion("workflow", [
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("customer_records"),
+    slots: customerRecordsSlotsSchema,
+    missingSlots: z.array(z.enum(["customer_query"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("record_customer_payment"),
+    slots: recordCustomerPaymentSlotsSchema,
+    missingSlots: z.array(z.enum(["customer_query", "amount_pence", "method", "note", "job_query"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("expense_list"),
+    slots: expenseListSlotsSchema,
+    missingSlots: z.array(z.enum(["range"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("vendor_summary"),
+    slots: vendorSummarySlotsSchema,
+    missingSlots: z.array(z.enum(["days"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("export_records_pdf"),
+    slots: exportRecordsPdfSlotsSchema,
+    missingSlots: z.array(z.enum(["customer_query"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("export_vendor_pdf"),
+    slots: exportVendorPdfSlotsSchema,
+    missingSlots: z.array(z.enum(["vendor_query"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("export_expense_pdf"),
+    slots: exportExpensePdfSlotsSchema,
+    missingSlots: z.array(z.never())
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("create_invoice"),
+    slots: createInvoiceSlotsSchema,
+    missingSlots: z.array(z.enum(["customer_query"]))
+  }),
   pendingFlowBaseSchema.extend({
     workflow: z.literal("create_customer"),
     slots: createCustomerSlotsSchema,
@@ -272,6 +384,14 @@ export type PendingFlowStepSchema = z.infer<typeof pendingFlowStepSchema>;
 export type RecentRefsSchema = z.infer<typeof recentRefsSchema>;
 export type EntityResolutionResultSchema = z.infer<typeof entityResolutionResultSchema>;
 export type ConfirmationStateSchema = z.infer<typeof confirmationStateSchema>;
+export type CustomerRecordsSlotsSchema = z.infer<typeof customerRecordsSlotsSchema>;
+export type RecordCustomerPaymentSlotsSchema = z.infer<typeof recordCustomerPaymentSlotsSchema>;
+export type ExpenseListSlotsSchema = z.infer<typeof expenseListSlotsSchema>;
+export type VendorSummarySlotsSchema = z.infer<typeof vendorSummarySlotsSchema>;
+export type ExportRecordsPdfSlotsSchema = z.infer<typeof exportRecordsPdfSlotsSchema>;
+export type ExportVendorPdfSlotsSchema = z.infer<typeof exportVendorPdfSlotsSchema>;
+export type ExportExpensePdfSlotsSchema = z.infer<typeof exportExpensePdfSlotsSchema>;
+export type CreateInvoiceSlotsSchema = z.infer<typeof createInvoiceSlotsSchema>;
 export type CreateCustomerSlotsSchema = z.infer<typeof createCustomerSlotsSchema>;
 export type RecordVendorDebtSlotsSchema = z.infer<typeof recordVendorDebtSlotsSchema>;
 export type RecordVendorPaymentSlotsSchema = z.infer<typeof recordVendorPaymentSlotsSchema>;

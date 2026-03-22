@@ -6,6 +6,7 @@ import { RemindersService } from "../../services/reminders.service";
 import { ReportsService } from "../../services/reports.service";
 import { UsersService } from "../../services/users.service";
 import { VendorPaymentsService } from "../../services/vendor-payments.service";
+import { ExportService } from "../../services/export.service";
 
 export type ConversationV2Services = {
   users: UsersService;
@@ -15,6 +16,7 @@ export type ConversationV2Services = {
   reports: ReportsService;
   reminders: RemindersService;
   vendorPayments: VendorPaymentsService;
+  exports: ExportService;
 };
 
 export const createConversationV2Services = (): ConversationV2Services => ({
@@ -24,7 +26,8 @@ export const createConversationV2Services = (): ConversationV2Services => ({
   payments: new PaymentsService(),
   reports: new ReportsService(),
   reminders: new RemindersService(),
-  vendorPayments: new VendorPaymentsService()
+  vendorPayments: new VendorPaymentsService(),
+  exports: new ExportService()
 });
 
 export const createCustomerExplicitly = async (input: {

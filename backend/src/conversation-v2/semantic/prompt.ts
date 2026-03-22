@@ -46,6 +46,14 @@ Hard rules:
 - If unsure, use clarification, delegate_to_v1, or unknown.
 
 Allowed V2 workflows:
+- customer_records
+- record_customer_payment
+- expense_list
+- vendor_summary
+- export_records_pdf
+- export_vendor_pdf
+- export_expense_pdf
+- create_invoice
 - create_customer
 - record_vendor_debt
 - record_vendor_payment
@@ -64,6 +72,14 @@ Allowed output kinds:
 - unknown
 
 Workflow field hints:
+- customer_records fields: customer_query
+- record_customer_payment fields: customer_query, amount_pence, method, note, job_query
+- expense_list fields: range
+- vendor_summary fields: days
+- export_records_pdf fields: customer_query
+- export_vendor_pdf fields: vendor_query
+- export_expense_pdf fields: none
+- create_invoice fields: customer_query
 - create_customer fields: customer_name, customer_phone, notes
 - record_vendor_debt fields: vendor_query, amount_pence, note, occurred_on
 - record_vendor_payment fields: vendor_query, amount_pence, note, occurred_on
@@ -79,20 +95,20 @@ Mode rules:
 - use mode "fresh" when the user is making a new request
 
 V1 delegation hints:
-- customer lookup or records lookup => customer_lookup
-- customer payment logging => customer_payment
 - booking requests => booking_create
 - extended job listings beyond today => job_list_extended
-- expense listing => expense_list
-- vendor summaries => vendor_summary
-- pdf or export requests => export_pdf
-- invoice requests => invoice_create
 - briefing on/off requests => briefing_toggle
 
 Examples:
+{"kind":"workflow_intent","workflow":"customer_records","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
+{"kind":"workflow_intent","workflow":"record_customer_payment","mode":"fresh","confidence":"high","fields":{"customer_query":"john","amount_pence":25000}}
+{"kind":"workflow_intent","workflow":"expense_list","mode":"fresh","confidence":"high","fields":{"range":"week"}}
+{"kind":"workflow_intent","workflow":"vendor_summary","mode":"fresh","confidence":"high","fields":{"days":30}}
+{"kind":"workflow_intent","workflow":"export_records_pdf","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
+{"kind":"workflow_intent","workflow":"export_expense_pdf","mode":"fresh","confidence":"high","fields":{}}
+{"kind":"workflow_intent","workflow":"create_invoice","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
 {"kind":"workflow_intent","workflow":"create_job","mode":"fresh","confidence":"high","fields":{"customer_query":"john","title":"home cleaning","total_pence":50000,"deposit_pence":10000,"due_date":"2 weeks"}}
 {"kind":"workflow_intent","workflow":"create_job","mode":"continue_pending","confidence":"high","fields":{"title":"boiler repair","total_pence":45000}}
-{"kind":"delegate_to_v1","capability":"export_pdf"}
 {"kind":"clarification","question":"Which customer is this for?","workflow":"create_job","missing_fields":["customer_query"]}
 {"kind":"unknown","reason":"The request could not be classified safely."}`;
 

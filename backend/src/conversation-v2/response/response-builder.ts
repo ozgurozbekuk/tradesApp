@@ -6,13 +6,16 @@ import type {
 } from "../engine/contracts";
 
 const SLOT_PROMPTS: Record<string, string> = {
+  customer_query: "Which customer is this for?",
   customer_name: "What is the customer name?",
   customer_phone: "What is the customer phone number?",
   vendor_query: "Which vendor is this for?",
   amount_pence: "What is the amount?",
+  method: "What payment method should I save: cash, bank, card, or unknown?",
   note: "What note should I save?",
   occurred_on: "What date should I use?",
-  customer_query: "Which customer is this for?",
+  range: "Which expense range do you want: today, yesterday, week, or all?",
+  days: "How many days should I use for the vendor summary?",
   title: "What is the job title?",
   total_pence: "What is the total amount for the job?",
   deposit_pence: "What is the deposit amount?",
@@ -25,6 +28,14 @@ const SLOT_PROMPTS: Record<string, string> = {
 };
 
 const WORKFLOW_LABELS: Record<WorkflowName, string> = {
+  customer_records: "customer records lookup",
+  record_customer_payment: "customer payment",
+  expense_list: "expense list",
+  vendor_summary: "vendor summary",
+  export_records_pdf: "records PDF export",
+  export_vendor_pdf: "vendor PDF export",
+  export_expense_pdf: "expense PDF export",
+  create_invoice: "invoice creation",
   create_customer: "customer creation",
   record_vendor_debt: "vendor debt",
   record_vendor_payment: "vendor payment",
@@ -37,7 +48,7 @@ const WORKFLOW_LABELS: Record<WorkflowName, string> = {
 };
 
 export const buildUnsupportedReply = () =>
-  "This request is not supported by Conversation V2 yet. Falling back to the existing flow is expected.";
+  "This request is not supported by Conversation V2 yet.";
 
 export const buildWorkflowReply = (result: WorkflowExecutionResult) => result.reply;
 
@@ -55,6 +66,10 @@ export const buildMissingSlotPrompt = (input: {
     return `I need a bit more information to continue with ${WORKFLOW_LABELS[input.workflow]}.`;
   }
 
+  if (input.workflow === "customer_records" && firstMissingSlot === "customer_query") {
+    return "Which customer records do you want?";
+  }
+
   return SLOT_PROMPTS[firstMissingSlot] ?? `I still need ${firstMissingSlot} to continue.`;
 };
 
@@ -63,8 +78,11 @@ export const buildEntityClarificationReply = (input: {
   entityState: EntityResolutionResult;
 }) => {
   if (input.entityState.status === "ambiguous") {
-    const options = input.entityState.candidates.slice(0, 5).map((candidate) => candidate.label).join(", ");
-    return `I found more than one match for ${WORKFLOW_LABELS[input.workflow]}. Please choose one: ${options}.`;
+    const options = input.entityState.candidates
+      .slice(0, 5)
+      .map((candidate, index) => `${index + 1}) ${candidate.label}`)
+      .join(", ");
+    return `I found more than one match for ${WORKFLOW_LABELS[input.workflow]}. Please choose one: ${options}. Reply with a number.`;
   }
 
   if (input.entityState.status === "not_found") {
@@ -73,6 +91,16 @@ export const buildEntityClarificationReply = (input: {
         return `I could not find a vendor matching "${input.entityState.unresolvedQuery}". Which vendor do you mean?`;
       case "create_job":
         return `I could not find a customer matching "${input.entityState.unresolvedQuery}". Create the customer first or give me a different customer.`;
+      case "customer_records":
+        return `I could not find a customer matching "${input.entityState.unresolvedQuery}". Which customer records do you want?`;
+      case "record_customer_payment":
+        return `I could not resolve "${input.entityState.unresolvedQuery}" for the payment. Which customer or job do you mean?`;
+      case "export_records_pdf":
+        return `I could not find a customer matching "${input.entityState.unresolvedQuery}" for the PDF export. Which customer do you mean?`;
+      case "export_vendor_pdf":
+        return `I could not find a vendor matching "${input.entityState.unresolvedQuery}" for the PDF export. Which vendor do you mean?`;
+      case "create_invoice":
+        return `I could not find a customer matching "${input.entityState.unresolvedQuery}" for the invoice. Which customer do you mean?`;
       case "update_job_status":
         return `I could not find a job matching "${input.entityState.unresolvedQuery}". Which job do you want to update?`;
       case "record_expense":

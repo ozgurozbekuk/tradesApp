@@ -2,6 +2,7 @@ import { env } from "../config/env";
 import { routeIncomingMessage, type IncomingMessage, type RoutedMessage } from "../messaging/router";
 import { UsersService } from "../services/users.service";
 import { createConversationV2Services, type ConversationV2Services } from "./adapters/services";
+import { remainingV1OnlyCapabilities } from "./cleanup/remaining-v1-capabilities";
 import { routeIncomingMessageV2 } from "./index";
 import {
   createInMemoryConversationStateStore,
@@ -111,13 +112,17 @@ export const routeIncomingMessageWithConversationV2 = async (
   );
 
   const shouldFallbackToV1 =
-    v2Result.status === "unsupported" && !hadPendingFlow && !v2Result.state.pendingFlow;
+    v2Result.status === "unsupported" &&
+    v2Result.fallbackToV1 === true &&
+    !hadPendingFlow &&
+    !v2Result.state.pendingFlow;
 
   if (shouldFallbackToV1) {
     log?.("conversation_v2_fallback_to_v1", {
       phone: input.from,
       userId: user.id,
-      body: input.body
+      body: input.body,
+      capability: v2Result.delegatedCapability
     });
 
     const v1Result = await routeV1(input);
@@ -131,7 +136,10 @@ export const routeIncomingMessageWithConversationV2 = async (
     phone: input.from,
     userId: user.id,
     workflow: v2Result.workflow,
-    status: v2Result.status
+    status: v2Result.status,
+    fallbackToV1: v2Result.fallbackToV1 === true,
+    delegatedCapability: v2Result.delegatedCapability,
+    remainingV1OnlyCapabilities: remainingV1OnlyCapabilities
   });
 
   return {
