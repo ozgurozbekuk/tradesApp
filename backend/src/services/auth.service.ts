@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";

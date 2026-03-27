@@ -1,3 +1,4 @@
+// Implements a reusable Express middleware for backend requests.
 import { Request, Response, NextFunction } from "express";
 
 type RateLimitOptions = {

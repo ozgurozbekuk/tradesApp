@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const toCanonicalKey = (key: string) => {

@@ -1,3 +1,4 @@
+// Renders a section of the landing page experience.
 import { footerLinks } from "./content";
 
 export const Footer = () => {

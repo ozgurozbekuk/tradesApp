@@ -1,3 +1,4 @@
+// Implements the agent-first orchestration layer for legacy messaging.
 import { env } from "../../config/env";
 import type { TodayPlanSnapshot } from "../../services/reminders.service";
 import type { AgentParseContext } from "../agent/agent-types";

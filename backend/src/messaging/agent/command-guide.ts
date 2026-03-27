@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 type CommandGuideOptions = {
   registered?: boolean;
   lastIntent?: string;

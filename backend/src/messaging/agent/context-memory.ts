@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import { ParsedIntent } from "../intents/schemas";
 import { AgentParseContext, AgentPendingFlow } from "./agent-types";
 

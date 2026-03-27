@@ -1,3 +1,4 @@
+// Parses user messages into structured intents for the legacy messaging stack.
 import { parseIntent } from "./command.parser";
 import { parseWithLlmFallback } from "./llm/llm-fallback.parser";
 import { ParsedIntent, WriteIntentTypeSchema } from "../intents/schemas";

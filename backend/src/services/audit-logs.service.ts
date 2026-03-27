@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { UsersService } from "./users.service";

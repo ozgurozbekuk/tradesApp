@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import { promisify } from "util";

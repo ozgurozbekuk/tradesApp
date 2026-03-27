@@ -1,3 +1,4 @@
+// Implements the legacy semantic agent layer used by V1 messaging flows.
 import { env } from "../../config/env";
 import { buildSemanticClarification } from "./clarification";
 import { SEMANTIC_AGENT_SYSTEM_PROMPT } from "./prompt";

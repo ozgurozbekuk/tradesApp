@@ -1,3 +1,4 @@
+// Provides state storage helpers for Conversation V2 conversations.
 import type { ConversationStateV2, PendingFlow } from "../engine/contracts";
 import { conversationStateV2Schema } from "./state-schema";
 

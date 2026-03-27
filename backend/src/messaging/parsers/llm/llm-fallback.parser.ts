@@ -1,3 +1,4 @@
+// Parses user messages into structured intents for the legacy messaging stack.
 import { env } from "../../../config/env";
 import { IntentSchema, ParsedIntent } from "../../intents/schemas";
 import { AgentParseContext, AgentIntentName, ParsedUserIntent } from "../../agent/agent-types";

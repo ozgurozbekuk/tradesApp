@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import { CustomersService, CustomerPdfCandidate } from "../../services/customers.service";
 import { JobResolutionCandidate, JobsService } from "../../services/jobs.service";
 

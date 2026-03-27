@@ -1,3 +1,4 @@
+// Defines the top-level frontend application shell.
 import { Navigate, Route, Routes } from "react-router-dom";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LandingPage } from "./pages/LandingPage";

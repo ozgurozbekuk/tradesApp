@@ -7,9 +7,11 @@ test("conversation date parsing understands week-based relative dates", () => {
 
   const inTwoWeeks = parseConversationDate("2 weeks", now);
   const nextWeek = parseConversationDate("next week", now);
+  const inFiveDays = parseConversationDate("5 days", now);
 
   assert.equal(inTwoWeeks?.toISOString().slice(0, 10), "2026-04-02");
   assert.equal(nextWeek?.toISOString().slice(0, 10), "2026-03-26");
+  assert.equal(inFiveDays?.toISOString().slice(0, 10), "2026-03-24");
 });
 
 test("conversation date parsing understands end of month and next weekday", () => {

@@ -1,3 +1,4 @@
+// Implements the legacy semantic agent layer used by V1 messaging flows.
 import type { AgentParseContext, ParsedUserIntent } from "../agent/agent-types";
 
 // Capability labels are broader than legacy intent names, which lets the runtime

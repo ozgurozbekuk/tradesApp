@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import crypto from "crypto";
 import { env } from "../../config/env";
 

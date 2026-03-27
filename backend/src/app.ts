@@ -1,3 +1,4 @@
+// Builds the Express application and registers shared middleware and routes.
 import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import express from "express";

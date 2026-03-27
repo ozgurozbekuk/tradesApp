@@ -1,3 +1,4 @@
+// Detects when a user message should continue or replace the current pending flow.
 import type { PendingFlow } from "../engine/contracts";
 
 export type TopicShiftDecision =
@@ -17,6 +18,11 @@ const STRONG_SHIFT_PATTERNS = [
   /\bshow\b.*\btoday\b.*\bjobs?\b/i,
   /\blist\b.*\btoday\b.*\bjobs?\b/i,
   /\btoday('?s)?\b.*\bjobs?\b/i,
+  /^(?:bring|show|get|find|open)\b.+\b(?:job|jobs|record|records|account|details)\b/i,
+  /\btoday\b.*\bpayments?\b/i,
+  /\bpayments?\b.*\btoday\b/i,
+  /\bplan\s+today\b/i,
+  /\btoday\s+plan\b/i,
   /\bdaily summary\b/i,
   /\bmonthly summary\b/i,
   /\brecord expense\b/i,

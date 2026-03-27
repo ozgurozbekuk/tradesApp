@@ -1,3 +1,4 @@
+// Wraps a Twilio integration concern used by WhatsApp messaging flows.
 import crypto from "crypto";
 
 export type TwilioParams = Record<string, string>;

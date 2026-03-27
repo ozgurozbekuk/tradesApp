@@ -1,3 +1,4 @@
+// Resolves numbered or textual replies against ambiguous entity candidates.
 import type { EntityResolutionResult } from "../engine/contracts";
 
 const ORDINAL_MAP: Record<string, number> = {

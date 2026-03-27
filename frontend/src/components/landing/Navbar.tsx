@@ -1,3 +1,4 @@
+// Renders a section of the landing page experience.
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { Link } from "react-router-dom";
 import { clerkEnabled } from "../../lib/env";

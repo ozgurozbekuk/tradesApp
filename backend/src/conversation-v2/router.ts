@@ -1,3 +1,4 @@
+// Routes incoming messages into Conversation V2 and decides when to fall back to V1.
 import { env } from "../config/env";
 import { routeIncomingMessage, type IncomingMessage, type RoutedMessage } from "../messaging/router";
 import { UsersService } from "../services/users.service";
@@ -38,6 +39,11 @@ const readConversationV2EnvEnabled = () =>
 
 const readConversationV2ConfiguredPhones = () =>
   process.env.CONVERSATION_V2_TEST_PHONES ?? env.CONVERSATION_V2_TEST_PHONES;
+
+const readDisableV1FallbackForConversationV2 = () =>
+  process.env.CONVERSATION_V2_DISABLE_V1_FALLBACK === undefined
+    ? env.CONVERSATION_V2_DISABLE_V1_FALLBACK
+    : process.env.CONVERSATION_V2_DISABLE_V1_FALLBACK === "true";
 
 const parseConversationV2TestPhones = (value: string | undefined) => {
   if (!value?.trim()) {
@@ -97,6 +103,7 @@ export const routeIncomingMessageWithConversationV2 = async (
   const existingState = await stateStore.load(user.id);
   const hadPendingFlow = Boolean(existingState?.pendingFlow);
   const services = dependencies.services ?? createConversationV2Services();
+  const disableV1Fallback = readDisableV1FallbackForConversationV2();
 
   const v2Result = await routeV2(
     {
@@ -112,6 +119,7 @@ export const routeIncomingMessageWithConversationV2 = async (
   );
 
   const shouldFallbackToV1 =
+    !disableV1Fallback &&
     v2Result.status === "unsupported" &&
     v2Result.fallbackToV1 === true &&
     !hadPendingFlow &&

@@ -1,3 +1,4 @@
+// Creates the shared Prisma database client for backend services.
 import { PrismaClient } from "@prisma/client";
 import { env } from "../config/env";
 

@@ -1,3 +1,4 @@
+// Routes legacy messaging flows and coordinates the V1 assistant stack.
 import { IntentSchema, ParsedIntent, WriteIntentTypeSchema } from "./intents/schemas";
 import { parseWithAgentLayer } from "./parsers/agent-orchestrator";
 import { adminReply, assistantReply, detailedReply, guideReply } from "./replies";

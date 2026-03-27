@@ -1,14 +1,11 @@
+// Executes Conversation V2 workflows against backend services and formats the results.
 import { JobStatus, PaymentMethod } from "@prisma/client";
 import type {
   EntityResolutionResult,
   WorkflowExecutionResult,
   WorkflowName
 } from "../engine/contracts";
-import {
-  createConversationV2Services,
-  createCustomerExplicitly,
-  type ConversationV2Services
-} from "../adapters/services";
+import { createConversationV2Services, createCustomerExplicitly, type ConversationV2Services } from "../adapters/services";
 import { parseConversationDate } from "../date-parsing";
 
 const penceToPounds = (value: number) => `£${(value / 100).toFixed(2)}`;
@@ -37,15 +34,27 @@ const buildCustomerRecordsReply = (record: {
   outstandingPence: number;
   lastPaymentPence: number | null;
   lastPaymentAt: Date | null;
+  recentJobs: Array<{
+    title: string;
+    status: string;
+    dueDate: Date | null;
+  }>;
 }) => {
   const lastPayment =
     record.lastPaymentPence !== null
       ? `Last payment ${penceToPounds(record.lastPaymentPence)}${record.lastPaymentAt ? ` on ${record.lastPaymentAt.toISOString().slice(0, 10)}` : ""}.`
       : "No payments yet.";
+  const jobsLine =
+    record.recentJobs.length > 0
+      ? `Recent jobs: ${record.recentJobs
+          .map((job) => `${job.title} (${job.status}${job.dueDate ? `, due ${job.dueDate.toISOString().slice(0, 10)}` : ""})`)
+          .join("; ")}.`
+      : "No jobs recorded yet.";
 
   return [
     `Customer record for ${record.name}${record.phone ? ` (${record.phone})` : ""}:`,
     `Active jobs: ${record.activeJobs}.`,
+    jobsLine,
     `Outstanding: ${penceToPounds(record.outstandingPence)}.`,
     lastPayment
   ].join(" ");
@@ -73,6 +82,47 @@ const buildExpenseListReply = (
     });
 
   return [`Recent expenses (${expenses.length}), total ${penceToPounds(totalPence)}:`, ...lines].join("\n");
+};
+
+const buildPaymentListReply = (
+  payments: Array<{
+    amountPence: number;
+    paidAt: Date;
+    note?: string | null;
+    job?: {
+      title: string;
+      customer?: {
+        name: string;
+      } | null;
+    } | null;
+  }>,
+  range: "today" | "yesterday" | "week" | "month" | "all"
+) => {
+  const rangeLabel =
+    range === "today"
+      ? "today"
+      : range === "yesterday"
+        ? "yesterday"
+        : range === "week"
+          ? "this week"
+          : range === "month"
+            ? "this month"
+            : "all time";
+
+  if (payments.length === 0) {
+    return range === "today" ? "There are no payments today." : `There are no payments for ${rangeLabel}.`;
+  }
+
+  const totalPence = payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+  const lines = payments.slice(0, 10).map((payment) => {
+    const customerName = payment.job?.customer?.name?.trim();
+    const jobTitle = payment.job?.title?.trim();
+    const context = customerName && jobTitle ? ` from ${customerName} for ${jobTitle}` : customerName ? ` from ${customerName}` : jobTitle ? ` for ${jobTitle}` : "";
+
+    return `- ${penceToPounds(payment.amountPence)} on ${payment.paidAt.toISOString().slice(0, 10)}${context}${payment.note ? ` (${payment.note})` : ""}`;
+  });
+
+  return [`Payments ${rangeLabel} (${payments.length}), total ${penceToPounds(totalPence)}:`, ...lines].join("\n");
 };
 
 const buildVendorSummaryReply = (summary: {
@@ -229,6 +279,24 @@ export const executeWorkflowAction = async (input: {
       return {
         workflow: input.workflow,
         reply: buildExpenseListReply(expenses),
+        completed: true
+      };
+    }
+
+    case "list_payments": {
+      const range =
+        typeof input.slots.range === "string" &&
+        ["today", "yesterday", "week", "month", "all"].includes(input.slots.range)
+          ? (input.slots.range as "today" | "yesterday" | "week" | "month" | "all")
+          : "today";
+      const payments = await services.payments.listPayments({
+        userId: input.userId,
+        range
+      });
+
+      return {
+        workflow: input.workflow,
+        reply: buildPaymentListReply(payments, range),
         completed: true
       };
     }
@@ -408,7 +476,20 @@ export const executeWorkflowAction = async (input: {
 
     case "create_job": {
       const customerId = getResolvedId(input.entityState, "customerId");
-      if (!customerId) {
+      const shouldCreateCustomerIfMissing = input.slots.create_customer_if_missing === true;
+      const customerQuery = typeof input.slots.customer_query === "string" ? input.slots.customer_query.trim() : "";
+
+      let targetCustomerId = customerId;
+
+      if (!targetCustomerId && shouldCreateCustomerIfMissing && input.entityState.status === "not_found" && customerQuery) {
+        const createdCustomer = await services.customers.upsertByPhoneOrName({
+          userId: input.userId,
+          name: customerQuery,
+        });
+        targetCustomerId = createdCustomer.id;
+      }
+
+      if (!targetCustomerId) {
         return {
           workflow: input.workflow,
           reply: "I still need a specific customer before I can create that job.",
@@ -418,7 +499,7 @@ export const executeWorkflowAction = async (input: {
 
       const result = await services.jobs.createJobForCustomerId({
         userId: input.userId,
-        customerId,
+        customerId: targetCustomerId,
         title: String(input.slots.title ?? "").trim(),
         priceTotalPence: Number(input.slots.total_pence ?? 0),
         depositPence:

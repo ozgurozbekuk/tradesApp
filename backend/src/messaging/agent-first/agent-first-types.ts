@@ -1,3 +1,4 @@
+// Implements the agent-first orchestration layer for legacy messaging.
 import type { ParsedIntent } from "../intents/schemas";
 import type { AgentParseContext, ParsedUserIntent } from "../agent/agent-types";
 

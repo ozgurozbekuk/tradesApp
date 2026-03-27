@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import type { ParsedIntent } from "../intents/schemas";
 
 export type AgentIntentName =

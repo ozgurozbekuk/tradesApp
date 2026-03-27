@@ -1,3 +1,4 @@
+// Tracks legacy capability gaps and cleanup work around the V2 migration.
 export const remainingV1OnlyCapabilities = [
   "booking_create",
   "job_list_extended",

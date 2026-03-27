@@ -1,3 +1,4 @@
+// Creates and types the service adapters that Conversation V2 depends on.
 import { prisma } from "../../db/prisma";
 import { CustomersService } from "../../services/customers.service";
 import { JobsService } from "../../services/jobs.service";

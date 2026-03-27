@@ -1,3 +1,4 @@
+// Loads and validates environment configuration used by the backend.
 import dotenv from "dotenv";
 import { z } from "zod";
 
@@ -52,6 +53,10 @@ const EnvSchema = z.object({
   USE_V2_SEMANTIC_FRONT_DOOR: z
     .string()
     .default("true")
+    .transform((value) => value === "true"),
+  CONVERSATION_V2_DISABLE_V1_FALLBACK: z
+    .string()
+    .optional()
     .transform((value) => value === "true"),
   CONVERSATION_V2_TEST_PHONES: z.string().optional(),
   AGENT_LEGACY_FALLBACK_ENABLED: z

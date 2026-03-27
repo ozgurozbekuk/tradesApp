@@ -1,3 +1,4 @@
+// Normalizes semantic front door output into runtime-friendly shapes.
 import type { WorkflowIntent, WorkflowName } from "../engine/contracts";
 import { workflowIntentSchema } from "../intent/intent-schema";
 import type { SemanticDelegateCapabilitySchema, SemanticFrontDoorResultSchema } from "./schema";

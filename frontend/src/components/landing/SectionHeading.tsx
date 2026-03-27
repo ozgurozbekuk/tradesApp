@@ -1,3 +1,4 @@
+// Renders a section of the landing page experience.
 type SectionHeadingProps = {
   eyebrow: string;
   title: string;

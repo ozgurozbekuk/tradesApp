@@ -1,3 +1,4 @@
+// Calls the semantic front door model and validates its structured output.
 import { env } from "../../config/env";
 import type { PendingFlow, RecentRefs } from "../engine/contracts";
 import {

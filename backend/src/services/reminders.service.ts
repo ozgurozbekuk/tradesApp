@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { BookingStatus, JobStatus, ReminderType, SubscriptionStatus } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";

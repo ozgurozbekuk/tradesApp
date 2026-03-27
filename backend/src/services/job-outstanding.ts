@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 export const SYSTEM_DEPOSIT_PAYMENT_NOTE = "Deposit recorded on job creation";
 
 type JobPaymentLike = {

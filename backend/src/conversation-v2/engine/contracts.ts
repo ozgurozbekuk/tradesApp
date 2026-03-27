@@ -1,6 +1,8 @@
+// Defines the core types and workflow contracts used by Conversation V2.
 export const WORKFLOW_NAMES = [
   "customer_records",
   "record_customer_payment",
+  "list_payments",
   "expense_list",
   "vendor_summary",
   "export_records_pdf",
@@ -39,6 +41,9 @@ export type WorkflowSlotsByName = {
     method?: "cash" | "bank" | "card" | "unknown";
     note?: string;
     job_query?: string;
+  };
+  list_payments: {
+    range?: "today" | "yesterday" | "week" | "month" | "all";
   };
   expense_list: {
     range?: "today" | "yesterday" | "week" | "all";
@@ -80,6 +85,7 @@ export type WorkflowSlotsByName = {
     deposit_pence?: number;
     due_date?: string;
     notes?: string;
+    create_customer_if_missing?: boolean;
   };
   update_job_status: {
     job_query?: string;

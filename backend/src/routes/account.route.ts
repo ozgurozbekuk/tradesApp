@@ -1,3 +1,4 @@
+// Defines an HTTP route module for the backend API.
 import { JobStatus } from "@prisma/client";
 import { getAuth, requireAuth } from "@clerk/express";
 import { Router } from "express";

@@ -1,3 +1,4 @@
+// Implements the agent-first orchestration layer for legacy messaging.
 import { z } from "zod";
 import type { AgentPendingFlow, ParsedUserIntent } from "../agent/agent-types";
 import type { ParsedIntent } from "../intents/schemas";

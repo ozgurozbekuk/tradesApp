@@ -1,3 +1,4 @@
+// Runs the Conversation V2 turn lifecycle, from interpretation to workflow execution.
 import { env } from "../../config/env";
 import type {
   ConfirmationState,
@@ -17,7 +18,7 @@ import { resolveWorkflowConfirmation } from "../confirmation/confirmation-handle
 import { resolveAmbiguousEntitySelection } from "../entity/disambiguation";
 import { resolveWorkflowEntities } from "../entity/entity-resolver";
 import { executeWorkflowAction } from "../execution/action-executor";
-import { resolveIntentV2 } from "../intent/intent-resolver";
+import { resolveIntentV2, type IntentResolutionResult } from "../intent/intent-resolver";
 import {
   buildConfirmationReply,
   buildConfirmationRetryReply,
@@ -37,6 +38,7 @@ import {
 import { createEmptyConversationStateV2, type ConversationStateStore } from "../state/state-store";
 import { decideTopicShift } from "../topic/topic-shift";
 import { workflowIntentSchema } from "../intent/intent-schema";
+import { buildBoundedAssistantReply } from "../../messaging/agent/bounded-chat";
 
 export type ConversationV2RuntimeDependencies = {
   stateStore: ConversationStateStore;
@@ -67,6 +69,47 @@ type PendingResolution =
     };
 
 const normalizeIncomingText = (text: string) => text.trim().replace(/\s+/g, " ");
+
+const LEADING_CHAT_PREFIX_PATTERN =
+  /^(?:(?:hi|hello|hey|good morning|good afternoon|good evening|morning|afternoon|evening|thanks|thank you|cheers|please|can you|could you|would you|mate|buddy|pal)\b[\s,!?.-]*)+/i;
+
+const PURE_CHAT_PATTERN =
+  /^(?:hi|hello|hey|good morning|good afternoon|good evening|morning|afternoon|evening|thanks|thank you|cheers|nice one|appreciate it|how are you|how's it going|hows it going|you good|are you okay|help|what can you do|what do you do|how can you help|who are you|ok|okay|cool|sounds good|alright|all good|great)[\s!?.]*$/i;
+
+const hasConversationalPrefix = (text: string) => LEADING_CHAT_PREFIX_PATTERN.test(text.trim());
+
+const stripConversationalPrefix = (text: string) => text.replace(LEADING_CHAT_PREFIX_PATTERN, "").trim();
+
+const isPureChatMessage = (text: string) => PURE_CHAT_PATTERN.test(text.trim());
+
+const buildConversationalTaskPrefix = (text: string) => {
+  const normalized = text.trim().toLowerCase();
+  if (/thank|thanks|cheers|nice one|appreciate it/.test(normalized)) {
+    return "No problem.";
+  }
+
+  if (/^(?:hi|hello|hey|good morning|good afternoon|good evening|morning|afternoon|evening)\b/.test(normalized)) {
+    return "Sure.";
+  }
+
+  if (/^(?:can you|could you|would you|please)\b/.test(normalized)) {
+    return "Of course.";
+  }
+
+  return null;
+};
+
+const prependConversationalPrefix = (reply: string, prefix: string | null) => {
+  if (!prefix) {
+    return reply;
+  }
+
+  if (!reply.trim()) {
+    return prefix;
+  }
+
+  return `${prefix} ${reply}`;
+};
 
 const readSemanticFrontDoorEnabled = () =>
   process.env.USE_V2_SEMANTIC_FRONT_DOOR === undefined
@@ -194,6 +237,18 @@ const resolvePendingState = async (input: {
   }
 
   if (entityState.status === "ambiguous" || entityState.status === "not_found") {
+    if (
+      input.workflow === "create_job" &&
+      entityState.status === "not_found" &&
+      input.slotState.slots.create_customer_if_missing === true
+    ) {
+      return {
+        kind: "ready",
+        slotState: input.slotState,
+        entityState
+      };
+    }
+
     return {
       kind: "entity_clarification",
       slotState: input.slotState,
@@ -286,6 +341,10 @@ export const runConversationV2Turn = async (
   const existingState = await dependencies.stateStore.load(input.userId);
   const state: ConversationStateV2 = existingState ?? createEmptyConversationStateV2(input.userId);
   const normalizedText = normalizeIncomingText(input.body);
+  const strippedConversationalText = stripConversationalPrefix(normalizedText);
+  const conversationalTaskPrefix = hasConversationalPrefix(normalizedText)
+    ? buildConversationalTaskPrefix(normalizedText)
+    : null;
 
   const baseState: ConversationStateV2 = {
     ...state,
@@ -293,6 +352,8 @@ export const runConversationV2Turn = async (
   };
 
   let workingState = baseState;
+  let carriedIntentResolution: IntentResolutionResult | null = null;
+  let shiftedPendingWorkflow: WorkflowName | undefined;
 
   if (workingState.pendingFlow) {
     const topicShiftDecision = decideTopicShift({
@@ -315,6 +376,7 @@ export const runConversationV2Turn = async (
     }
 
     if (topicShiftDecision.type === "shift_to_fresh_intent") {
+      shiftedPendingWorkflow = workingState.pendingFlow.workflow;
       workingState = {
         ...workingState,
         pendingFlow: undefined
@@ -323,6 +385,8 @@ export const runConversationV2Turn = async (
   }
 
   if (workingState.pendingFlow) {
+    const pendingFlowBeforeHeuristic = workingState.pendingFlow;
+
     if (workingState.pendingFlow.step === "confirmation" && workingState.pendingFlow.confirmationState) {
       const confirmationAnswer = parseConfirmationAnswer(normalizedText);
 
@@ -463,18 +527,39 @@ export const runConversationV2Turn = async (
       semanticLlmCaller: dependencies.semanticLlmCaller
     });
 
+    const heuristicPendingIntent = await resolveIntentV2({
+      text: normalizedText
+    });
+
     if (
+      heuristicPendingIntent.type === "intent" &&
+      heuristicPendingIntent.intent.workflow !== pendingFlowBeforeHeuristic.workflow
+    ) {
+      workingState = {
+        ...workingState,
+        pendingFlow: undefined
+      };
+      carriedIntentResolution = heuristicPendingIntent;
+    }
+
+    if (carriedIntentResolution) {
+      emitConversationV2Event("conversation_v2.pending.shifted_by_heuristic_intent", {
+        userId: input.userId,
+        previousWorkflow: state.pendingFlow?.workflow,
+        nextWorkflow: carriedIntentResolution.intent.workflow
+      });
+    } else if (
       semanticPendingTurn?.type === "clarification" &&
-      (!semanticPendingTurn.workflow || semanticPendingTurn.workflow === workingState.pendingFlow.workflow)
+      (!semanticPendingTurn.workflow || semanticPendingTurn.workflow === pendingFlowBeforeHeuristic.workflow)
     ) {
       emitConversationV2Event("conversation_v2.semantic.pending_clarification", {
         userId: input.userId,
-        workflow: workingState.pendingFlow.workflow,
+        workflow: pendingFlowBeforeHeuristic.workflow,
         question: semanticPendingTurn.question
       });
 
       const pendingFlow = {
-        ...workingState.pendingFlow,
+        ...pendingFlowBeforeHeuristic,
         prompt: semanticPendingTurn.question,
         updatedAt: now.toISOString()
       };
@@ -491,170 +576,200 @@ export const runConversationV2Turn = async (
       });
     }
 
-    const continuationFields =
-      semanticPendingTurn?.type === "workflow_intent" &&
-      semanticPendingTurn.mode === "continue_pending" &&
-      semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
-        ? (semanticPendingTurn.intent.fields as Record<string, unknown>)
-        : extractContinuationFields(workingState.pendingFlow, input.body);
+    if (!workingState.pendingFlow) {
+      // Fresh intent will be handled by the main path below.
+    } else {
+      const continuationFields =
+        semanticPendingTurn?.type === "workflow_intent" &&
+        semanticPendingTurn.mode === "continue_pending" &&
+        semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
+          ? (semanticPendingTurn.intent.fields as Record<string, unknown>)
+          : heuristicPendingIntent.type === "intent" &&
+              heuristicPendingIntent.intent.workflow === workingState.pendingFlow.workflow
+            ? (heuristicPendingIntent.intent.fields as Record<string, unknown>)
+            : extractContinuationFields(workingState.pendingFlow, input.body);
 
-    if (
-      semanticPendingTurn?.type === "workflow_intent" &&
-      semanticPendingTurn.mode === "continue_pending" &&
-      semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
-    ) {
-      emitConversationV2Event("conversation_v2.semantic.pending_continue", {
+      if (
+        semanticPendingTurn?.type === "workflow_intent" &&
+        semanticPendingTurn.mode === "continue_pending" &&
+        semanticPendingTurn.intent.workflow === workingState.pendingFlow.workflow
+      ) {
+        emitConversationV2Event("conversation_v2.semantic.pending_continue", {
+          userId: input.userId,
+          workflow: workingState.pendingFlow.workflow,
+          filledKeys: Object.keys(semanticPendingTurn.intent.fields)
+        });
+      }
+
+      const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
+      const resolution = await resolvePendingState({
         userId: input.userId,
         workflow: workingState.pendingFlow.workflow,
-        filledKeys: Object.keys(semanticPendingTurn.intent.fields)
-      });
-    }
-
-    const slotState = mergePendingFlowSlots(workingState.pendingFlow, continuationFields);
-    const resolution = await resolvePendingState({
-      userId: input.userId,
-      workflow: workingState.pendingFlow.workflow,
-      slotState,
-      recentRefs: workingState.recentRefs
-    });
-
-    if (resolution.kind === "missing_slots") {
-      const prompt = buildMissingSlotPrompt({
-        workflow: workingState.pendingFlow.workflow,
-        missingSlots: resolution.slotState.missingSlots,
-        validationErrors: resolution.slotState.validationErrors
-      });
-      const pendingFlow = buildPendingFlow({
-        workflow: workingState.pendingFlow.workflow,
-        slotState: resolution.slotState,
-        entityState: workingState.pendingFlow.entityState,
-        previous: workingState.pendingFlow,
-        now,
-        sourceMessageId: input.messageSid,
-        prompt
+        slotState,
+        recentRefs: workingState.recentRefs
       });
 
-      return saveAndReturn({
-        stateStore: dependencies.stateStore,
-        state: {
-          ...workingState,
-          pendingFlow
-        },
-        reply: prompt,
-        workflow: pendingFlow.workflow,
-        status: "pending"
-      });
-    }
+      if (resolution.kind === "missing_slots") {
+        const prompt = buildMissingSlotPrompt({
+          workflow: workingState.pendingFlow.workflow,
+          missingSlots: resolution.slotState.missingSlots,
+          validationErrors: resolution.slotState.validationErrors
+        });
+        const pendingFlow = buildPendingFlow({
+          workflow: workingState.pendingFlow.workflow,
+          slotState: resolution.slotState,
+          entityState: workingState.pendingFlow.entityState,
+          previous: workingState.pendingFlow,
+          now,
+          sourceMessageId: input.messageSid,
+          prompt
+        });
 
-    if (resolution.kind === "entity_clarification") {
-      const prompt = buildEntityClarificationReply({
-        workflow: workingState.pendingFlow.workflow,
-        entityState: resolution.entityState
-      });
-      const pendingFlow = buildPendingFlow({
-        workflow: workingState.pendingFlow.workflow,
-        slotState: resolution.slotState,
-        entityState: resolution.entityState,
-        previous: workingState.pendingFlow,
-        now,
-        sourceMessageId: input.messageSid,
-        prompt
-      });
-
-      return saveAndReturn({
-        stateStore: dependencies.stateStore,
-        state: {
-          ...workingState,
-          pendingFlow
-        },
-        reply: prompt,
-        workflow: pendingFlow.workflow,
-        status: "pending"
-      });
-    }
-
-    if (resolution.kind === "confirmation") {
-      const prompt = buildConfirmationReply(resolution.confirmationState);
-      const pendingFlow = buildPendingFlow({
-        workflow: workingState.pendingFlow.workflow,
-        slotState: resolution.slotState,
-        entityState: resolution.entityState,
-        confirmationState: resolution.confirmationState,
-        previous: workingState.pendingFlow,
-        now,
-        sourceMessageId: input.messageSid,
-        prompt
-      });
-
-      return saveAndReturn({
-        stateStore: dependencies.stateStore,
-        state: {
-          ...workingState,
-          pendingFlow
-        },
-        reply: prompt,
-        workflow: pendingFlow.workflow,
-        status: "pending"
-      });
-    }
-
-    const executionResult = await executeWorkflowAction({
-      userId: input.userId,
-      workflow: workingState.pendingFlow.workflow,
-      slots: resolution.slotState.slots,
-      entityState: resolution.entityState,
-      services: dependencies.services
-    });
-
-    if (executionResult.completed) {
-      return saveAndReturn({
-        stateStore: dependencies.stateStore,
-        state: {
-          ...workingState,
-          recentRefs: {
-            ...workingState.recentRefs,
-            ...executionResult.recentRefs
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: {
+            ...workingState,
+            pendingFlow
           },
-          pendingFlow: undefined,
-          lastCompletedWorkflow: executionResult.workflow
+          reply: prompt,
+          workflow: pendingFlow.workflow,
+          status: "pending"
+        });
+      }
+
+      if (resolution.kind === "entity_clarification") {
+        const prompt = buildEntityClarificationReply({
+          workflow: workingState.pendingFlow.workflow,
+          entityState: resolution.entityState
+        });
+        const pendingFlow = buildPendingFlow({
+          workflow: workingState.pendingFlow.workflow,
+          slotState: resolution.slotState,
+          entityState: resolution.entityState,
+          previous: workingState.pendingFlow,
+          now,
+          sourceMessageId: input.messageSid,
+          prompt
+        });
+
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: {
+            ...workingState,
+            pendingFlow
+          },
+          reply: prompt,
+          workflow: pendingFlow.workflow,
+          status: "pending"
+        });
+      }
+
+      if (resolution.kind === "confirmation") {
+        const prompt = buildConfirmationReply(resolution.confirmationState);
+        const pendingFlow = buildPendingFlow({
+          workflow: workingState.pendingFlow.workflow,
+          slotState: resolution.slotState,
+          entityState: resolution.entityState,
+          confirmationState: resolution.confirmationState,
+          previous: workingState.pendingFlow,
+          now,
+          sourceMessageId: input.messageSid,
+          prompt
+        });
+
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: {
+            ...workingState,
+            pendingFlow
+          },
+          reply: prompt,
+          workflow: pendingFlow.workflow,
+          status: "pending"
+        });
+      }
+
+      const executionResult = await executeWorkflowAction({
+        userId: input.userId,
+        workflow: workingState.pendingFlow.workflow,
+        slots: resolution.slotState.slots,
+        entityState: resolution.entityState,
+        services: dependencies.services
+      });
+
+      if (executionResult.completed) {
+        return saveAndReturn({
+          stateStore: dependencies.stateStore,
+          state: {
+            ...workingState,
+            recentRefs: {
+              ...workingState.recentRefs,
+              ...executionResult.recentRefs
+            },
+            pendingFlow: undefined,
+            lastCompletedWorkflow: executionResult.workflow
+          },
+          reply: buildWorkflowReply(executionResult),
+          mediaUrl: executionResult.mediaUrl,
+          workflow: executionResult.workflow,
+          status: "completed"
+        });
+      }
+
+      const pendingFlow = buildPendingFlow({
+        workflow: workingState.pendingFlow.workflow,
+        slotState: resolution.slotState,
+        entityState: resolution.entityState,
+        previous: workingState.pendingFlow,
+        now,
+        sourceMessageId: input.messageSid,
+        prompt: buildWorkflowReply(executionResult)
+      });
+
+      return saveAndReturn({
+        stateStore: dependencies.stateStore,
+        state: {
+          ...workingState,
+          pendingFlow
         },
         reply: buildWorkflowReply(executionResult),
-        mediaUrl: executionResult.mediaUrl,
-        workflow: executionResult.workflow,
-        status: "completed"
+        workflow: pendingFlow.workflow,
+        status: "pending"
       });
     }
+  }
 
-    const pendingFlow = buildPendingFlow({
-      workflow: workingState.pendingFlow.workflow,
-      slotState: resolution.slotState,
-      entityState: resolution.entityState,
-      previous: workingState.pendingFlow,
-      now,
-      sourceMessageId: input.messageSid,
-      prompt: buildWorkflowReply(executionResult)
+  if (isPureChatMessage(normalizedText)) {
+    const chatReply = await buildBoundedAssistantReply({
+      message: normalizedText,
+      registered: true
     });
 
     return saveAndReturn({
       stateStore: dependencies.stateStore,
-      state: {
-        ...workingState,
-        pendingFlow
-      },
-      reply: buildWorkflowReply(executionResult),
-      workflow: pendingFlow.workflow,
-      status: "pending"
+      state: workingState,
+      reply: chatReply ?? "I can help with jobs, customers, payments, invoices, expenses, and reminders.",
+      status: "completed"
     });
   }
 
-  const semanticFreshTurn = await resolveSemanticNormalizedTurn({
-    userId: input.userId,
-    body: input.body,
-    recentRefs: workingState.recentRefs,
-    semanticLlmCaller: dependencies.semanticLlmCaller
-  });
+  const semanticFreshTurn = carriedIntentResolution
+    ? null
+    : await resolveSemanticNormalizedTurn({
+        userId: input.userId,
+        body: input.body,
+        recentRefs: workingState.recentRefs,
+        semanticLlmCaller: dependencies.semanticLlmCaller
+      });
 
-  if (semanticFreshTurn?.type === "respond") {
+  const normalizedSemanticFreshTurn =
+    shiftedPendingWorkflow &&
+    semanticFreshTurn?.type === "clarification" &&
+    semanticFreshTurn.workflow === shiftedPendingWorkflow
+      ? null
+      : semanticFreshTurn;
+
+  if (normalizedSemanticFreshTurn?.type === "respond") {
     emitConversationV2Event("conversation_v2.semantic.respond", {
       userId: input.userId
     });
@@ -662,15 +777,15 @@ export const runConversationV2Turn = async (
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: workingState,
-      reply: semanticFreshTurn.message,
+      reply: prependConversationalPrefix(normalizedSemanticFreshTurn.message, conversationalTaskPrefix),
       status: "completed"
     });
   }
 
-  if (semanticFreshTurn?.type === "delegate_to_v1") {
+  if (normalizedSemanticFreshTurn?.type === "delegate_to_v1") {
     emitConversationV2Event("conversation_v2.semantic.delegate_to_v1", {
       userId: input.userId,
-      capability: semanticFreshTurn.capability
+      capability: normalizedSemanticFreshTurn.capability
     });
 
     return saveAndReturn({
@@ -679,39 +794,39 @@ export const runConversationV2Turn = async (
       reply: buildUnsupportedReply(),
       status: "unsupported",
       fallbackToV1: true,
-      delegatedCapability: semanticFreshTurn.capability
+      delegatedCapability: normalizedSemanticFreshTurn.capability
     });
   }
 
-  if (semanticFreshTurn?.type === "clarification") {
+  if (normalizedSemanticFreshTurn?.type === "clarification") {
     emitConversationV2Event("conversation_v2.semantic.fresh_clarification", {
       userId: input.userId,
-      workflow: semanticFreshTurn.workflow,
-      missingFields: semanticFreshTurn.missingFields
+      workflow: normalizedSemanticFreshTurn.workflow,
+      missingFields: normalizedSemanticFreshTurn.missingFields
     });
 
-    if (!semanticFreshTurn.workflow) {
+    if (!normalizedSemanticFreshTurn.workflow) {
       return saveAndReturn({
         stateStore: dependencies.stateStore,
         state: workingState,
-        reply: semanticFreshTurn.question,
+        reply: normalizedSemanticFreshTurn.question,
         status: "pending"
       });
     }
 
-    const emptyIntent = buildEmptyWorkflowIntent(semanticFreshTurn.workflow);
+    const emptyIntent = buildEmptyWorkflowIntent(normalizedSemanticFreshTurn.workflow);
     const initialSlotState = buildInitialSlotState(emptyIntent);
     const slotState = {
       ...initialSlotState,
-      missingSlots: semanticFreshTurn.missingFields ?? initialSlotState.missingSlots
+      missingSlots: normalizedSemanticFreshTurn.missingFields ?? initialSlotState.missingSlots
     };
     const pendingFlow = buildPendingFlow({
-      workflow: semanticFreshTurn.workflow,
+      workflow: normalizedSemanticFreshTurn.workflow,
       slotState,
       entityState: { status: "idle" },
       now,
       sourceMessageId: input.messageSid,
-      prompt: semanticFreshTurn.question
+      prompt: normalizedSemanticFreshTurn.question
     });
 
     return saveAndReturn({
@@ -720,31 +835,41 @@ export const runConversationV2Turn = async (
         ...workingState,
         pendingFlow
       },
-      reply: semanticFreshTurn.question,
+      reply: normalizedSemanticFreshTurn.question,
       workflow: pendingFlow.workflow,
       status: "pending"
     });
   }
 
   const intentResolution =
-    semanticFreshTurn?.type === "workflow_intent" && semanticFreshTurn.mode === "fresh"
+    carriedIntentResolution ??
+    (normalizedSemanticFreshTurn?.type === "workflow_intent" && normalizedSemanticFreshTurn.mode === "fresh"
       ? {
           type: "intent" as const,
-          intent: semanticFreshTurn.intent
+          intent: normalizedSemanticFreshTurn.intent
         }
       : await resolveIntentV2({
           text: normalizedText
-        });
+        }));
+
+  const normalizedIntentResolution =
+    intentResolution.type === "unsupported" && strippedConversationalText && strippedConversationalText !== normalizedText
+      ? await resolveIntentV2({
+          text: strippedConversationalText
+        })
+      : intentResolution;
 
   emitConversationV2Event("conversation_v2.runtime.intent_path", {
     userId: input.userId,
-    semanticUsed: Boolean(semanticFreshTurn?.type === "workflow_intent" && semanticFreshTurn.mode === "fresh"),
-    semanticType: semanticFreshTurn?.type,
-    resultType: intentResolution.type,
-    workflow: intentResolution.type === "intent" ? intentResolution.intent.workflow : undefined
+    semanticUsed: Boolean(
+      normalizedSemanticFreshTurn?.type === "workflow_intent" && normalizedSemanticFreshTurn.mode === "fresh"
+    ),
+    semanticType: normalizedSemanticFreshTurn?.type,
+    resultType: normalizedIntentResolution.type,
+    workflow: normalizedIntentResolution.type === "intent" ? normalizedIntentResolution.intent.workflow : undefined
   });
 
-  if (intentResolution.type === "unsupported") {
+  if (normalizedIntentResolution.type === "unsupported") {
     return saveAndReturn({
       stateStore: dependencies.stateStore,
       state: workingState,
@@ -756,22 +881,23 @@ export const runConversationV2Turn = async (
     });
   }
 
-  const initialSlotState = buildInitialSlotState(intentResolution.intent as WorkflowIntent);
+  const initialSlotState = buildInitialSlotState(normalizedIntentResolution.intent as WorkflowIntent);
+  const resolvedIntent = normalizedIntentResolution.intent;
   const resolution = await resolvePendingState({
     userId: input.userId,
-    workflow: intentResolution.intent.workflow,
+    workflow: resolvedIntent.workflow,
     slotState: initialSlotState,
     recentRefs: workingState.recentRefs
   });
 
   if (resolution.kind === "missing_slots") {
     const prompt = buildMissingSlotPrompt({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       missingSlots: resolution.slotState.missingSlots,
       validationErrors: resolution.slotState.validationErrors
     });
     const pendingFlow = buildPendingFlow({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       slotState: resolution.slotState,
       entityState: { status: "idle" },
       now,
@@ -785,19 +911,19 @@ export const runConversationV2Turn = async (
         ...workingState,
         pendingFlow
       },
-      reply: prompt,
-      workflow: pendingFlow.workflow,
-      status: "pending"
+        reply: prompt,
+        workflow: pendingFlow.workflow,
+        status: "pending"
     });
   }
 
   if (resolution.kind === "entity_clarification") {
     const prompt = buildEntityClarificationReply({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       entityState: resolution.entityState
     });
     const pendingFlow = buildPendingFlow({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       slotState: resolution.slotState,
       entityState: resolution.entityState,
       now,
@@ -811,16 +937,16 @@ export const runConversationV2Turn = async (
         ...workingState,
         pendingFlow
       },
-      reply: prompt,
-      workflow: pendingFlow.workflow,
-      status: "pending"
+        reply: prompt,
+        workflow: pendingFlow.workflow,
+        status: "pending"
     });
   }
 
   if (resolution.kind === "confirmation") {
     const prompt = buildConfirmationReply(resolution.confirmationState);
     const pendingFlow = buildPendingFlow({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       slotState: resolution.slotState,
       entityState: resolution.entityState,
       confirmationState: resolution.confirmationState,
@@ -835,15 +961,15 @@ export const runConversationV2Turn = async (
         ...workingState,
         pendingFlow
       },
-      reply: prompt,
-      workflow: pendingFlow.workflow,
-      status: "pending"
+        reply: prompt,
+        workflow: pendingFlow.workflow,
+        status: "pending"
     });
   }
 
   const executionResult = await executeWorkflowAction({
     userId: input.userId,
-    workflow: intentResolution.intent.workflow,
+    workflow: resolvedIntent.workflow,
     slots: resolution.slotState.slots,
     entityState: resolution.entityState,
     services: dependencies.services
@@ -851,7 +977,7 @@ export const runConversationV2Turn = async (
 
   if (!executionResult.completed) {
     const pendingFlow = buildPendingFlow({
-      workflow: intentResolution.intent.workflow,
+      workflow: resolvedIntent.workflow,
       slotState: resolution.slotState,
       entityState: resolution.entityState,
       now,
@@ -865,10 +991,10 @@ export const runConversationV2Turn = async (
         ...workingState,
         pendingFlow
       },
-      reply: buildWorkflowReply(executionResult),
-      workflow: pendingFlow.workflow,
-      status: "pending"
-    });
+        reply: prependConversationalPrefix(buildWorkflowReply(executionResult), conversationalTaskPrefix),
+        workflow: pendingFlow.workflow,
+        status: "pending"
+      });
   }
 
   return saveAndReturn({
@@ -881,7 +1007,7 @@ export const runConversationV2Turn = async (
       },
       lastCompletedWorkflow: executionResult.workflow
     },
-    reply: buildWorkflowReply(executionResult),
+    reply: prependConversationalPrefix(buildWorkflowReply(executionResult), conversationalTaskPrefix),
     mediaUrl: executionResult.mediaUrl,
     workflow: executionResult.workflow,
     status: "completed"

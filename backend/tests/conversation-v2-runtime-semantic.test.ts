@@ -32,6 +32,32 @@ const buildServices = () =>
     vendorPayments: {}
   }) as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services;
 
+const buildSummaryServices = () =>
+  ({
+    users: {},
+    customers: {},
+    jobs: {},
+    payments: {},
+    reports: {
+      getSummary: async () => ({
+        jobsCreated: 2,
+        jobsCompleted: 1,
+        paymentsReceivedPence: 35000,
+        expensesPaidPence: 12000,
+        outstandingPence: 5000
+      })
+    },
+    reminders: {
+      buildTodayPlan: async () => ({
+        scheduledToday: 0,
+        dueSoonCount: 0,
+        overdueCount: 0,
+        todayJobs: []
+      })
+    },
+    vendorPayments: {}
+  }) as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services;
+
 const buildExecutionServices = () =>
   ({
     users: {},
@@ -72,7 +98,19 @@ const buildCustomerRecordsServices = () =>
         activeJobs: 2,
         outstandingPence: 25000,
         lastPaymentPence: 12000,
-        lastPaymentAt: new Date("2026-03-01T10:00:00.000Z")
+        lastPaymentAt: new Date("2026-03-01T10:00:00.000Z"),
+        recentJobs: [
+          {
+            title: "Boiler repair",
+            status: "active",
+            dueDate: new Date("2026-03-20T00:00:00.000Z")
+          },
+          {
+            title: "Window cleaning",
+            status: "completed",
+            dueDate: null
+          }
+        ]
       })
     },
     jobs: {},
@@ -118,6 +156,46 @@ const buildCustomerPaymentServices = () =>
       })
     },
     vendorPayments: {}
+  }) as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services;
+
+const buildPaymentsListServices = (payments: Array<{
+  amountPence: number;
+  paidAt: Date;
+  note?: string | null;
+  customerName?: string;
+  jobTitle?: string;
+}>) =>
+  ({
+    users: {},
+    customers: {},
+    jobs: {},
+    payments: {
+      listPayments: async () =>
+        payments.map((payment) => ({
+          amountPence: payment.amountPence,
+          paidAt: payment.paidAt,
+          note: payment.note ?? null,
+          job: {
+            title: payment.jobTitle ?? "Unknown job",
+            customer: payment.customerName
+              ? {
+                  name: payment.customerName
+                }
+              : null
+          }
+        }))
+    },
+    reports: {},
+    reminders: {
+      buildTodayPlan: async () => ({
+        scheduledToday: 0,
+        dueSoonCount: 0,
+        overdueCount: 0,
+        todayJobs: []
+      })
+    },
+    vendorPayments: {},
+    exports: {}
   }) as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services;
 
 const buildExpenseAndVendorServices = () =>
@@ -276,6 +354,30 @@ test("runtime requests explicit v1 fallback only for semantic delegated capabili
   assert.equal(result.delegatedCapability, "booking_create");
 });
 
+test("runtime returns a command guide instead of a raw unsupported message", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-unsupported-1",
+      from: "+447000000031",
+      body: "do the magic thing",
+      messageSid: "MSG-UNSUPPORTED-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildServices()
+    }
+  );
+
+  assert.equal(result.status, "unsupported");
+  assert.match(result.reply, /I did not understand that request yet\./);
+  assert.match(result.reply, /create customer John/);
+  assert.match(result.reply, /summary today/);
+});
+
 test("runtime completes customer records after numbered ambiguity selection", async () => {
   ensureEnv();
   process.env.USE_V2_SEMANTIC_FRONT_DOOR = "true";
@@ -329,6 +431,7 @@ test("runtime completes customer records after numbered ambiguity selection", as
   assert.equal(result.status, "completed");
   assert.equal(result.workflow, "customer_records");
   assert.match(result.reply, /Customer record for John Doe/);
+  assert.match(result.reply, /Recent jobs: Boiler repair \(active, due 2026-03-20\); Window cleaning \(completed\)\./);
   assert.match(result.reply, /Outstanding: £250.00/);
   assert.equal(result.state.pendingFlow, undefined);
   assert.equal(result.state.recentRefs.customerId, "customer-1");
@@ -395,6 +498,107 @@ test("runtime completes customer payment after selecting one outstanding job", a
   assert.equal(result.state.pendingFlow, undefined);
   assert.equal(result.state.recentRefs.customerId, "customer-1");
   assert.equal(result.state.recentRefs.jobId, "job-1");
+});
+
+test("runtime lists today's payments instead of asking for a customer", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-payments-today-1",
+      from: "+447000000018",
+      body: "today payments",
+      messageSid: "MSG-PAYMENTS-TODAY-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildPaymentsListServices([
+        {
+          amountPence: 25000,
+          paidAt: new Date("2026-03-27T09:00:00.000Z"),
+          customerName: "John Doe",
+          jobTitle: "Garden cleaning",
+          note: "bank transfer"
+        }
+      ])
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "list_payments");
+  assert.match(result.reply, /Payments today/);
+  assert.match(result.reply, /John Doe/);
+});
+
+test("runtime returns no-payments message when there are no payments today", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-payments-today-2",
+      from: "+447000000019",
+      body: "today payments",
+      messageSid: "MSG-PAYMENTS-TODAY-2"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildPaymentsListServices([])
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "list_payments");
+  assert.equal(result.reply, "There are no payments today.");
+});
+
+test("runtime handles casual small talk as bounded chat", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-chat-1",
+      from: "+447000000020",
+      body: "how are you",
+      messageSid: "MSG-CHAT-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildServices()
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, undefined);
+  assert.match(result.reply, /I'm good and ready to help\./);
+});
+
+test("runtime keeps task execution but adds a conversational tone for mixed messages", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-chat-2",
+      from: "+447000000021",
+      body: "hi, today payments",
+      messageSid: "MSG-CHAT-2"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildPaymentsListServices([])
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "list_payments");
+  assert.equal(result.reply, "Sure. There are no payments today.");
 });
 
 test("runtime completes expense list through semantic front door", async () => {
@@ -829,4 +1033,187 @@ test("runtime resolves ambiguous entity selection from numbered replies", async 
   assert.equal(result.workflow, "create_job");
   assert.equal(result.reply, "Created job New Job for John Doe.");
   assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime shifts out of a pending flow when a fresh heuristic intent is detected", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "true";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  const stateStore = createInMemoryConversationStateStore();
+
+  await stateStore.save({
+    userId: "user-6",
+    channel: "whatsapp",
+    lastMessageAt: new Date().toISOString(),
+    recentRefs: {},
+    version: "v2",
+    pendingFlow: {
+      id: "customer_records:MSG-old-4",
+      workflow: "customer_records",
+      step: "slot_filling",
+      slots: {},
+      missingSlots: ["customer_query"],
+      entityState: { status: "idle" },
+      prompt: "Which customer records do you want?",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      topicShiftPolicy: "allow_strong_shift",
+      sourceMessageId: "MSG-old-4"
+    }
+  });
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-6",
+      from: "+447000000006",
+      body: "summary today",
+      messageSid: "MSG-SEM-6"
+    },
+    {
+      stateStore,
+      services: buildSummaryServices(),
+      semanticLlmCaller: async () => ({
+        kind: "clarification",
+        question: "Which customer records do you want?",
+        workflow: "customer_records",
+        missing_fields: ["customer_query"]
+      })
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "daily_summary");
+  assert.match(result.reply, /^Daily summary:/);
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime ignores stale fresh semantic clarification after shifting out of a pending flow", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "true";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  const stateStore = createInMemoryConversationStateStore();
+
+  await stateStore.save({
+    userId: "user-shift-job-records-1",
+    channel: "whatsapp",
+    lastMessageAt: new Date().toISOString(),
+    recentRefs: {},
+    version: "v2",
+    pendingFlow: {
+      id: "create_job:MSG-old-6",
+      workflow: "create_job",
+      step: "slot_filling",
+      slots: {
+        customer_query: "someone",
+        title: "paint walls"
+      },
+      missingSlots: ["total_pence"],
+      entityState: { status: "idle" },
+      prompt: "What is the total amount for the job?",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      topicShiftPolicy: "allow_strong_shift",
+      sourceMessageId: "MSG-old-6"
+    }
+  });
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-shift-job-records-1",
+      from: "+447000000041",
+      body: "plan today",
+      messageSid: "MSG-SHIFT-JOB-RECORDS-1"
+    },
+    {
+      stateStore,
+      services: buildServices(),
+      semanticLlmCaller: async () => ({
+        kind: "clarification",
+        question: "What is the total amount for the job?",
+        workflow: "create_job",
+        missing_fields: ["total_pence"]
+      })
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "list_today_jobs");
+  assert.match(result.reply, /Today:/);
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime uses heuristic continuation fields for the same pending workflow", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  const stateStore = createInMemoryConversationStateStore();
+
+  await stateStore.save({
+    userId: "user-7",
+    channel: "whatsapp",
+    lastMessageAt: new Date().toISOString(),
+    recentRefs: {},
+    version: "v2",
+    pendingFlow: {
+      id: "record_expense:MSG-old-5",
+      workflow: "record_expense",
+      step: "slot_filling",
+      slots: {},
+      missingSlots: ["amount_pence"],
+      entityState: { status: "idle" },
+      prompt: "What is the amount?",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      topicShiftPolicy: "allow_strong_shift",
+      sourceMessageId: "MSG-old-5"
+    }
+  });
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-7",
+      from: "+447000000007",
+      body: "record expense 12",
+      messageSid: "MSG-SEM-7"
+    },
+    {
+      stateStore,
+      services: {
+        ...buildServices(),
+        vendorPayments: {
+          addExpensePaid: async () => ({ id: "expense-1" })
+        }
+      } as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "record_expense");
+  assert.equal(result.reply, "Recorded expense of £12.00.");
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime answers basic greetings instead of marking them unsupported", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-8",
+      from: "+447000000008",
+      body: "hello",
+      messageSid: "MSG-SEM-8"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildServices()
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.match(result.reply, /^Hi\./);
 });

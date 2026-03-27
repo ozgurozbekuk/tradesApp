@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { env } from "../config/env";
 
 export class SubscriptionService {

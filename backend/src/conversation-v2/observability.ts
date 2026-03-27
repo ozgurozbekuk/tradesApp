@@ -1,3 +1,4 @@
+// Emits structured observability events for Conversation V2.
 import { env } from "../config/env";
 
 type ConversationV2Event = {

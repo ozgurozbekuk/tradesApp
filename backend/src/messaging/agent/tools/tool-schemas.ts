@@ -1,3 +1,4 @@
+// Defines tool schemas and execution helpers for the legacy agent stack.
 import { z } from "zod";
 
 export const CreateJobToolSchema = z.object({

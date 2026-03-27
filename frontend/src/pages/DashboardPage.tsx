@@ -1,3 +1,4 @@
+// Renders a top-level frontend page.
 import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";

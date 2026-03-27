@@ -1,3 +1,4 @@
+// Renders a section of the landing page experience.
 import { useCaseCommands } from "./content";
 import { SectionHeading } from "./SectionHeading";
 

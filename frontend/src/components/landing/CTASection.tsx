@@ -1,3 +1,4 @@
+// Renders a section of the landing page experience.
 export const CTASection = () => {
   return (
     <section className="bg-[#eef3fb] py-24">

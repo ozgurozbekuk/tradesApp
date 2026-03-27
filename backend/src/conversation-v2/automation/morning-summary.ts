@@ -1,3 +1,4 @@
+// Implements an automated Conversation V2 workflow trigger.
 import { ReportsService } from "../../services/reports.service";
 
 export type MorningSummaryMessage = {

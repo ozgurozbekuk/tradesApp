@@ -1,3 +1,4 @@
+// Starts the backend HTTP server and bootstraps runtime services.
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { startCron } from "./cron";

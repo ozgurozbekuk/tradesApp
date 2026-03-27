@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import { AgentIntentName } from "./agent-types";
 
 const formatFieldLabel = (field: string) => {

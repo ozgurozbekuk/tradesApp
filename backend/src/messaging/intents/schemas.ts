@@ -1,3 +1,4 @@
+// Defines intent shapes used by the legacy messaging stack.
 import { z } from "zod";
 
 export const IntentSchema = z.discriminatedUnion("type", [

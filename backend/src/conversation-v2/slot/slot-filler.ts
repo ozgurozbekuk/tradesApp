@@ -1,3 +1,4 @@
+// Tracks slot requirements and merges continuation fields for Conversation V2 workflows.
 import type { PendingFlow, WorkflowIntent, WorkflowName } from "../engine/contracts";
 import { parseConversationDate } from "../date-parsing";
 import { workflowSlotsSchemaMap } from "../state/state-schema";
@@ -5,6 +6,7 @@ import { workflowSlotsSchemaMap } from "../state/state-schema";
 const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   customer_records: ["customer_query"],
   record_customer_payment: ["customer_query", "amount_pence"],
+  list_payments: [],
   expense_list: [],
   vendor_summary: [],
   export_records_pdf: [],
@@ -25,6 +27,7 @@ const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
 const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
   customer_records: ["customer_query"],
   record_customer_payment: ["customer_query", "amount_pence", "method", "note", "job_query"],
+  list_payments: ["range"],
   expense_list: ["range"],
   vendor_summary: ["days"],
   export_records_pdf: ["customer_query"],
@@ -34,7 +37,7 @@ const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
   create_customer: ["customer_name", "customer_phone", "notes"],
   record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
   record_vendor_payment: ["vendor_query", "amount_pence", "note", "occurred_on"],
-  create_job: ["customer_query", "title", "total_pence", "deposit_pence", "due_date", "notes"],
+  create_job: ["customer_query", "title", "total_pence", "deposit_pence", "due_date", "notes", "create_customer_if_missing"],
   update_job_status: ["job_query", "status"],
   list_today_jobs: ["scope"],
   record_expense: ["amount_pence", "category", "note", "occurred_on", "vendor_query"],

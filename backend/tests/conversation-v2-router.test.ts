@@ -77,6 +77,7 @@ test("conversation v2 router routes eligible users into v2", async () => {
 test("conversation v2 router falls back to v1 for fresh unsupported turns", async () => {
   ensureEnv();
   process.env.USE_CONVERSATION_V2 = "true";
+  process.env.CONVERSATION_V2_DISABLE_V1_FALLBACK = "false";
   process.env.CONVERSATION_V2_TEST_PHONES = "";
 
   const { routeIncomingMessageWithConversationV2 } = await import("../src/conversation-v2/router");
@@ -112,6 +113,48 @@ test("conversation v2 router falls back to v1 for fresh unsupported turns", asyn
 
   assert.equal(result.source, "v1");
   assert.equal(result.reply, "v1 fallback reply");
+});
+
+test("conversation v2 router stays on v2 when v1 fallback is explicitly disabled", async () => {
+  ensureEnv();
+  process.env.USE_CONVERSATION_V2 = "true";
+  process.env.CONVERSATION_V2_DISABLE_V1_FALLBACK = "true";
+  process.env.CONVERSATION_V2_TEST_PHONES = "";
+
+  const { routeIncomingMessageWithConversationV2 } = await import("../src/conversation-v2/router");
+  const stateStore = createInMemoryConversationStateStore();
+
+  const result = await routeIncomingMessageWithConversationV2(
+    {
+      from: "+447000000031",
+      body: "book john for tomorrow at 9",
+      messageSid: "MSG-31"
+    },
+    {
+      stateStore,
+      usersService: {
+        findByPhone: async () => ({ id: "user-31", phone: "+447000000031" })
+      },
+      routeV1: async () => ({ reply: "v1 fallback reply" }),
+      routeV2: async () => ({
+        reply: "unsupported in v2",
+        state: {
+          userId: "user-31",
+          channel: "whatsapp",
+          lastMessageAt: new Date().toISOString(),
+          recentRefs: {},
+          version: "v2"
+        },
+        status: "unsupported",
+        fallbackToV1: true,
+        delegatedCapability: "booking_create"
+      })
+    }
+  );
+
+  assert.equal(result.source, "v2");
+  assert.equal(result.reply, "unsupported in v2");
+  assert.equal(result.v2Status, "unsupported");
 });
 
 test("conversation v2 router keeps unsupported turns on v2 when no explicit v1 delegation was requested", async () => {

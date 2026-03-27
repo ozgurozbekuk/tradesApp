@@ -1,8 +1,10 @@
+// Defines persisted state and pending-flow schemas for Conversation V2.
 import { z } from "zod";
 
 export const workflowNameSchema = z.enum([
   "customer_records",
   "record_customer_payment",
+  "list_payments",
   "expense_list",
   "vendor_summary",
   "export_records_pdf",
@@ -139,6 +141,12 @@ export const recordCustomerPaymentSlotsSchema = z
   })
   .strict();
 
+export const listPaymentsSlotsSchema = z
+  .object({
+    range: z.enum(["today", "yesterday", "week", "month", "all"]).optional()
+  })
+  .strict();
+
 export const expenseListSlotsSchema = z
   .object({
     range: z.enum(["today", "yesterday", "week", "all"]).optional()
@@ -196,7 +204,8 @@ export const createJobSlotsSchema = z
     total_pence: z.number().int().nonnegative().optional(),
     deposit_pence: z.number().int().nonnegative().optional(),
     due_date: z.string().min(1).optional(),
-    notes: z.string().min(1).optional()
+    notes: z.string().min(1).optional(),
+    create_customer_if_missing: z.boolean().optional()
   })
   .strict()
   .refine(
@@ -249,6 +258,7 @@ export const monthlySummarySlotsSchema = z
 export const workflowSlotsSchemaMap = {
   customer_records: customerRecordsSlotsSchema,
   record_customer_payment: recordCustomerPaymentSlotsSchema,
+  list_payments: listPaymentsSlotsSchema,
   expense_list: expenseListSlotsSchema,
   vendor_summary: vendorSummarySlotsSchema,
   export_records_pdf: exportRecordsPdfSlotsSchema,
@@ -289,6 +299,11 @@ export const pendingFlowSchema = z.discriminatedUnion("workflow", [
     workflow: z.literal("record_customer_payment"),
     slots: recordCustomerPaymentSlotsSchema,
     missingSlots: z.array(z.enum(["customer_query", "amount_pence", "method", "note", "job_query"]))
+  }),
+  pendingFlowBaseSchema.extend({
+    workflow: z.literal("list_payments"),
+    slots: listPaymentsSlotsSchema,
+    missingSlots: z.array(z.enum(["range"]))
   }),
   pendingFlowBaseSchema.extend({
     workflow: z.literal("expense_list"),
@@ -386,6 +401,7 @@ export type EntityResolutionResultSchema = z.infer<typeof entityResolutionResult
 export type ConfirmationStateSchema = z.infer<typeof confirmationStateSchema>;
 export type CustomerRecordsSlotsSchema = z.infer<typeof customerRecordsSlotsSchema>;
 export type RecordCustomerPaymentSlotsSchema = z.infer<typeof recordCustomerPaymentSlotsSchema>;
+export type ListPaymentsSlotsSchema = z.infer<typeof listPaymentsSlotsSchema>;
 export type ExpenseListSlotsSchema = z.infer<typeof expenseListSlotsSchema>;
 export type VendorSummarySlotsSchema = z.infer<typeof vendorSummarySlotsSchema>;
 export type ExportRecordsPdfSlotsSchema = z.infer<typeof exportRecordsPdfSlotsSchema>;

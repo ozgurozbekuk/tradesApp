@@ -1,3 +1,4 @@
+// Defines the typed schema for supported Conversation V2 intents.
 import { z } from "zod";
 import {
   customerRecordsSlotsSchema,
@@ -11,6 +12,7 @@ import {
   exportVendorPdfSlotsSchema,
   listTodayJobsSlotsSchema,
   monthlySummarySlotsSchema,
+  listPaymentsSlotsSchema,
   recordCustomerPaymentSlotsSchema,
   recordExpenseSlotsSchema,
   recordVendorDebtSlotsSchema,
@@ -31,6 +33,10 @@ export const workflowIntentSchema = z.discriminatedUnion("workflow", [
   intentBaseSchema.extend({
     workflow: z.literal("record_customer_payment"),
     fields: recordCustomerPaymentSlotsSchema
+  }),
+  intentBaseSchema.extend({
+    workflow: z.literal("list_payments"),
+    fields: listPaymentsSlotsSchema
   }),
   intentBaseSchema.extend({
     workflow: z.literal("expense_list"),

@@ -1,3 +1,4 @@
+// Defines tool schemas and execution helpers for the legacy agent stack.
 import { logUserAction } from "../../../services/audit-logs.service";
 import { CustomersService } from "../../../services/customers.service";
 import { ExportService } from "../../../services/export.service";

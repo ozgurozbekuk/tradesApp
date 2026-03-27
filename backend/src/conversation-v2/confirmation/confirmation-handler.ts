@@ -1,3 +1,4 @@
+// Decides when Conversation V2 must ask for explicit confirmation before acting.
 import type { ConfirmationState, EntityResolutionResult, WorkflowName } from "../engine/contracts";
 import { CustomersService } from "../../services/customers.service";
 
@@ -33,6 +34,7 @@ export const resolveWorkflowConfirmation = async (input: {
   switch (input.workflow) {
     case "customer_records":
     case "record_customer_payment":
+    case "list_payments":
     case "expense_list":
     case "vendor_summary":
     case "export_records_pdf":

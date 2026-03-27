@@ -1,3 +1,4 @@
+// Implements the legacy semantic agent layer used by V1 messaging flows.
 export const SEMANTIC_AGENT_SYSTEM_PROMPT = `You are a WhatsApp business admin assistant for a self-employed tradesperson in the UK.
 
 Your job:

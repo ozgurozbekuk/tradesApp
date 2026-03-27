@@ -1,3 +1,4 @@
+// Implements a reusable Express middleware for backend requests.
 import { NextFunction, Request, Response } from "express";
 
 export const notFoundHandler = (req: Request, res: Response) => {

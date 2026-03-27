@@ -1,3 +1,4 @@
+// Implements helper logic for the legacy bounded business assistant.
 import { env } from "../../config/env";
 import { AgentParseContext } from "./agent-types";
 

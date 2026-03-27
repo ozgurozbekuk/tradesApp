@@ -1,3 +1,4 @@
+// Builds user-facing replies for Conversation V2 workflow states.
 import type {
   ConfirmationState,
   EntityResolutionResult,
@@ -30,6 +31,7 @@ const SLOT_PROMPTS: Record<string, string> = {
 const WORKFLOW_LABELS: Record<WorkflowName, string> = {
   customer_records: "customer records lookup",
   record_customer_payment: "customer payment",
+  list_payments: "payment list",
   expense_list: "expense list",
   vendor_summary: "vendor summary",
   export_records_pdf: "records PDF export",
@@ -48,7 +50,16 @@ const WORKFLOW_LABELS: Record<WorkflowName, string> = {
 };
 
 export const buildUnsupportedReply = () =>
-  "This request is not supported by Conversation V2 yet.";
+  [
+    "I did not understand that request yet.",
+    "Try one of these:",
+    "- create customer John",
+    "- bring John records",
+    "- create invoice for John",
+    "- add expense 400 for cleaning staff",
+    "- show today jobs",
+    "- summary today"
+  ].join("\n");
 
 export const buildWorkflowReply = (result: WorkflowExecutionResult) => result.reply;
 

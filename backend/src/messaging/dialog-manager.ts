@@ -1,3 +1,4 @@
+// Manages clarification and pending-dialog behavior in the legacy messaging stack.
 import { env } from "../config/env";
 import type { AgentParseContext, ParsedUserIntent } from "./agent/agent-types";
 import type { SemanticCapabilityName } from "./semantic-agent/types";

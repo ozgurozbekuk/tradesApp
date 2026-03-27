@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { prisma } from "../db/prisma";
 import { calculateJobOutstandingPence } from "./job-outstanding";
 
@@ -9,6 +10,11 @@ export type CustomerRecordSummary = {
   outstandingPence: number;
   lastPaymentPence: number | null;
   lastPaymentAt: Date | null;
+  recentJobs: Array<{
+    title: string;
+    status: string;
+    dueDate: Date | null;
+  }>;
 };
 
 export type CustomerPdfCandidate = {
@@ -16,6 +22,7 @@ export type CustomerPdfCandidate = {
   name: string;
   phone: string | null;
   createdAt: Date;
+  latestActiveJobTitle?: string | null;
 };
 
 export class CustomersService {
@@ -138,7 +145,12 @@ export class CustomersService {
         activeJobs: activeJobs.length,
         outstandingPence,
         lastPaymentPence: allPayments[0]?.amountPence ?? null,
-        lastPaymentAt: allPayments[0]?.paidAt ?? null
+        lastPaymentAt: allPayments[0]?.paidAt ?? null,
+        recentJobs: customer.jobs.slice(0, 3).map((job) => ({
+          title: job.title,
+          status: job.status,
+          dueDate: job.dueDate
+        }))
       };
     });
   }
@@ -178,7 +190,12 @@ export class CustomersService {
       activeJobs: activeJobs.length,
       outstandingPence,
       lastPaymentPence: allPayments[0]?.amountPence ?? null,
-      lastPaymentAt: allPayments[0]?.paidAt ?? null
+      lastPaymentAt: allPayments[0]?.paidAt ?? null,
+      recentJobs: customer.jobs.slice(0, 3).map((job) => ({
+        title: job.title,
+        status: job.status,
+        dueDate: job.dueDate
+      }))
     };
   }
 
@@ -240,11 +257,26 @@ export class CustomersService {
         id: true,
         name: true,
         phone: true,
-        createdAt: true
+        createdAt: true,
+        jobs: {
+          select: {
+            title: true
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 1
+        }
       },
       orderBy: [{ createdAt: "desc" }],
       take: input.take ?? 80
-    });
+    }).then((customers) =>
+      customers.map((customer) => ({
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        createdAt: customer.createdAt,
+        latestActiveJobTitle: customer.jobs[0]?.title ?? null
+      }))
+    );
   }
 
   findPdfCandidatesByExactName(input: {

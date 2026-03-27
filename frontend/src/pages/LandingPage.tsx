@@ -1,3 +1,4 @@
+// Renders a top-level frontend page.
 import { CTASection } from "../components/landing/CTASection";
 import { FeaturesSection } from "../components/landing/FeaturesSection";
 import { Footer } from "../components/landing/Footer";

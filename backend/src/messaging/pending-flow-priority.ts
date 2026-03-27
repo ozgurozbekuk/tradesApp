@@ -1,3 +1,4 @@
+// Applies priority rules for pending legacy messaging flows.
 import type { AgentParseContext } from "./agent/agent-types";
 import type { OrchestratedParseResult } from "./parsers/agent-orchestrator";
 import { parseHeuristicDomainIntent } from "./parsers/heuristic-domain.parser";

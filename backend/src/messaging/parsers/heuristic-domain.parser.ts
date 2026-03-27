@@ -1,3 +1,4 @@
+// Parses user messages into structured intents for the legacy messaging stack.
 import { ParsedIntent } from "../intents/schemas";
 import { buildClarificationQuestion } from "../agent/clarification-builder";
 import { AgentParseContext, ParsedUserIntent } from "../agent/agent-types";

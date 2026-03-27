@@ -1,3 +1,4 @@
+// Resolves customer, vendor, and job references for Conversation V2 workflows.
 import type { EntityResolutionResult, RecentRefs, WorkflowName } from "../engine/contracts";
 import { CustomersService } from "../../services/customers.service";
 import { JobsService } from "../../services/jobs.service";
@@ -9,12 +10,25 @@ const customersService = new CustomersService();
 const jobsService = new JobsService();
 const vendorPaymentsService = new VendorPaymentsService();
 
-const buildCandidateLabels = <
+const extractSurname = (name: string) => {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length >= 2 ? parts.slice(1).join(" ") : "";
+};
+
+const hasVisibleSurname = (name: string) => extractSurname(name).length > 0;
+
+export const buildCandidateLabels = <
   TCandidate extends {
     id: string;
     name?: string;
     phone?: string | null;
     createdAt?: Date;
+    latestActiveJobTitle?: string | null;
     balancePence?: number;
     vendorName?: string;
     title?: string;
@@ -27,10 +41,22 @@ const buildCandidateLabels = <
   type: "customer" | "vendor" | "job"
 ) => {
   const formatDate = (value: Date | null | undefined) => (value ? value.toISOString().slice(0, 10) : undefined);
+  const customerNames = type === "customer" ? candidates.map((candidate) => String(candidate.name ?? "").trim()) : [];
+  const hasAnyCustomerSurname = customerNames.some((name) => hasVisibleSurname(name));
 
   const labels = candidates.map((candidate, index) => {
     if (type === "customer") {
       const name = String(candidate.name ?? "").trim() || `Customer ${index + 1}`;
+      const latestActiveJobTitle = String(candidate.latestActiveJobTitle ?? "").trim();
+
+      if (hasAnyCustomerSurname && hasVisibleSurname(name)) {
+        return name;
+      }
+
+      if (latestActiveJobTitle) {
+        return `${name} - ${latestActiveJobTitle}`;
+      }
+
       if (candidate.phone) {
         return `${name} (${candidate.phone})`;
       }
@@ -427,6 +453,7 @@ export const resolveWorkflowEntities = async (input: {
       });
 
     case "create_customer":
+    case "list_payments":
     case "expense_list":
     case "vendor_summary":
     case "list_today_jobs":

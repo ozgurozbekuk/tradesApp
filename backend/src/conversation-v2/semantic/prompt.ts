@@ -1,3 +1,4 @@
+// Builds prompts for the Conversation V2 semantic front door.
 import type { PendingFlow, RecentRefs } from "../engine/contracts";
 
 export type ConversationV2SemanticPromptContext = {
@@ -48,6 +49,7 @@ Hard rules:
 Allowed V2 workflows:
 - customer_records
 - record_customer_payment
+- list_payments
 - expense_list
 - vendor_summary
 - export_records_pdf
@@ -74,6 +76,7 @@ Allowed output kinds:
 Workflow field hints:
 - customer_records fields: customer_query
 - record_customer_payment fields: customer_query, amount_pence, method, note, job_query
+- list_payments fields: range
 - expense_list fields: range
 - vendor_summary fields: days
 - export_records_pdf fields: customer_query
@@ -83,7 +86,7 @@ Workflow field hints:
 - create_customer fields: customer_name, customer_phone, notes
 - record_vendor_debt fields: vendor_query, amount_pence, note, occurred_on
 - record_vendor_payment fields: vendor_query, amount_pence, note, occurred_on
-- create_job fields: customer_query, title, total_pence, deposit_pence, due_date, notes
+- create_job fields: customer_query, title, total_pence, deposit_pence, due_date, notes, create_customer_if_missing
 - update_job_status fields: job_query, status
 - list_today_jobs fields: scope
 - record_expense fields: amount_pence, category, note, occurred_on, vendor_query
@@ -102,12 +105,14 @@ V1 delegation hints:
 Examples:
 {"kind":"workflow_intent","workflow":"customer_records","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
 {"kind":"workflow_intent","workflow":"record_customer_payment","mode":"fresh","confidence":"high","fields":{"customer_query":"john","amount_pence":25000}}
+{"kind":"workflow_intent","workflow":"list_payments","mode":"fresh","confidence":"high","fields":{"range":"today"}}
 {"kind":"workflow_intent","workflow":"expense_list","mode":"fresh","confidence":"high","fields":{"range":"week"}}
 {"kind":"workflow_intent","workflow":"vendor_summary","mode":"fresh","confidence":"high","fields":{"days":30}}
 {"kind":"workflow_intent","workflow":"export_records_pdf","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
 {"kind":"workflow_intent","workflow":"export_expense_pdf","mode":"fresh","confidence":"high","fields":{}}
 {"kind":"workflow_intent","workflow":"create_invoice","mode":"fresh","confidence":"high","fields":{"customer_query":"john"}}
 {"kind":"workflow_intent","workflow":"create_job","mode":"fresh","confidence":"high","fields":{"customer_query":"john","title":"home cleaning","total_pence":50000,"deposit_pence":10000,"due_date":"2 weeks"}}
+{"kind":"workflow_intent","workflow":"create_job","mode":"fresh","confidence":"high","fields":{"customer_query":"jane doe","title":"garden cleaning","total_pence":50000,"deposit_pence":20000,"due_date":"7 days","create_customer_if_missing":true}}
 {"kind":"workflow_intent","workflow":"create_job","mode":"continue_pending","confidence":"high","fields":{"title":"boiler repair","total_pence":45000}}
 {"kind":"clarification","question":"Which customer is this for?","workflow":"create_job","missing_fields":["customer_query"]}
 {"kind":"unknown","reason":"The request could not be classified safely."}`;

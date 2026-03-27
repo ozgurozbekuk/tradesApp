@@ -1,3 +1,4 @@
+// Wraps a Twilio integration concern used by WhatsApp messaging flows.
 import { env } from "../../config/env";
 
 export type SendWhatsAppMessageInput = {

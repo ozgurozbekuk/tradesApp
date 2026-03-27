@@ -1,3 +1,4 @@
+// Stores landing page copy and configuration values.
 export const howItWorksSteps = [
   {
     title: "Open WhatsApp",

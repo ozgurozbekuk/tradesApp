@@ -1,3 +1,4 @@
+// Bootstraps the frontend React application.
 import { ClerkProvider } from "@clerk/clerk-react";
 import React from "react";
 import ReactDOM from "react-dom/client";

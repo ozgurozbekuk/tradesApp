@@ -1,3 +1,4 @@
+// Registers and starts scheduled backend jobs.
 import { RemindersService } from "../services/reminders.service";
 import { BackupService } from "../services/backup.service";
 

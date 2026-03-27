@@ -1,3 +1,4 @@
+// Implements the agent-first orchestration layer for legacy messaging.
 import { agentFirstToolList } from "./agent-first-tools";
 
 const toolLines = agentFirstToolList

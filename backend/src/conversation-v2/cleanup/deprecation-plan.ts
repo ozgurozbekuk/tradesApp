@@ -1,3 +1,4 @@
+// Tracks legacy capability gaps and cleanup work around the V2 migration.
 export const conversationV2DeprecationTargets = [
   "backend/src/messaging/router.ts",
   "backend/src/messaging/dialog-manager.ts",

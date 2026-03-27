@@ -1,3 +1,4 @@
+// Formats short and long reply text for messaging responses.
 const SHORT_REPLY_LENGTH = 280;
 const LONG_REPLY_LENGTH = 1500;
 

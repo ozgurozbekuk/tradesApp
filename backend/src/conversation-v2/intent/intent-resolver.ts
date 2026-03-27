@@ -1,3 +1,4 @@
+// Maps incoming text into supported Conversation V2 workflow intents.
 import type { WorkflowIntent, WorkflowName } from "../engine/contracts";
 import { workflowIntentSchema } from "./intent-schema";
 
@@ -52,6 +53,12 @@ const monthNameToNumber = (value: string) => {
 
 const normalizeWhitespace = (text: string) => text.trim().replace(/\s+/g, " ");
 
+const normalizeSeparatorWhitespace = (text: string) =>
+  text
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*:\s*/g, ": ")
+    .trim();
+
 const isLikelyPhone = (text: string) => /\+?\d[\d\s()-]{6,}/.test(text);
 
 const extractPhone = (text: string) => {
@@ -69,6 +76,17 @@ const extractOccurredOn = (text: string) => {
   );
 
   return dateMatch?.[1]?.trim();
+};
+
+const extractTaggedField = (text: string, labels: string[], allLabels: string[]) => {
+  const escapedLabels = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const escapedAllLabels = allLabels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(
+    `(?:^|[,;])\\s*(?:${escapedLabels.join("|")})\\s*:\\s*(.+?)(?=(?:\\s*[,;]\\s*(?:${escapedAllLabels.join("|")})\\s*:)|$)`,
+    "i"
+  );
+
+  return text.match(pattern)?.[1]?.trim();
 };
 
 const extractStatus = (text: string) => {
@@ -144,6 +162,8 @@ const resolveCreateCustomerIntent = (text: string): IntentResolutionResult | nul
 const resolveCustomerRecordsIntent = (text: string): IntentResolutionResult | null => {
   const match =
     text.match(/^(?:bring|show|get|find|open)\s+(.+?)\s+(?:records|account|details)$/i) ??
+    text.match(/^(?:bring|show|get|find|open)\s+(.+?)\s+job$/i) ??
+    text.match(/^(?:bring|show|get|find|open)\s+jobs?\s+(?:for\s+)?(.+)$/i) ??
     text.match(/^(?:customer\s+)?records(?:\s+for)?\s*[:=]?\s*(.+)$/i) ??
     text.match(/^account(?:\s+for)?\s+(.+)$/i);
   if (!match) {
@@ -151,7 +171,11 @@ const resolveCustomerRecordsIntent = (text: string): IntentResolutionResult | nu
   }
 
   const customerQuery = match[1]?.trim();
-  if (!customerQuery || /\b(all|everything|all records)\b/i.test(customerQuery)) {
+  if (
+    !customerQuery ||
+    /\b(all|everything|all records)\b/i.test(customerQuery) ||
+    /^(?:today|today's|tomorrow|yesterday|this week|this month)$/i.test(customerQuery)
+  ) {
     return null;
   }
 
@@ -197,6 +221,32 @@ const resolveExpenseListIntent = (text: string): IntentResolutionResult | null =
     normalized.includes("today") ? "today" : normalized.includes("yesterday") ? "yesterday" : normalized.includes("week") ? "week" : "all";
 
   return buildIntent("expense_list", "high", {
+    range
+  });
+};
+
+const resolvePaymentListIntent = (text: string): IntentResolutionResult | null => {
+  const normalized = text.toLowerCase();
+  const isPaymentListRequest =
+    /\b(payments?|payment list|recent payments?)\b/i.test(text) &&
+    !/^(?:record|add|log)\s+payment\b/i.test(text) &&
+    !/.+\s+paid(?:\s+£|\s+\d)/i.test(text);
+
+  if (!isPaymentListRequest) {
+    return null;
+  }
+
+  const range = normalized.includes("today")
+    ? "today"
+    : normalized.includes("yesterday")
+      ? "yesterday"
+      : normalized.includes("week")
+        ? "week"
+        : normalized.includes("month")
+          ? "month"
+          : "all";
+
+  return buildIntent("list_payments", "high", {
     range
   });
 };
@@ -302,7 +352,11 @@ const resolvePartialCustomerPaymentIntent = (text: string): IntentResolutionResu
 };
 
 const resolveListTodayJobsIntent = (text: string): IntentResolutionResult | null => {
-  if (!/\b(today('?s)?|today)\b.*\bjobs?\b/i.test(text) && !/\b(list|show|get)\b.*\btoday\b.*\bjobs?\b/i.test(text)) {
+  if (
+    !/\b(today('?s)?|today)\b.*\bjobs?\b/i.test(text) &&
+    !/\b(list|show|get)\b.*\btoday\b.*\bjobs?\b/i.test(text) &&
+    !/^(?:plan\s+today|today\s+plan)$/i.test(text)
+  ) {
     return null;
   }
 
@@ -425,6 +479,42 @@ const resolveCreateJobIntent = (text: string): IntentResolutionResult | null => 
   });
 };
 
+const resolveStructuredCreateJobForNewCustomerIntent = (text: string): IntentResolutionResult | null => {
+  if (!/(?:^|[,;])\s*(?:new customer|add new customer|create customer)\s*:/i.test(text)) {
+    return null;
+  }
+
+  if (!/(?:^|[,;])\s*(?:job|title|price|deposit|due|due date)\s*:/i.test(text)) {
+    return null;
+  }
+
+  const normalized = normalizeSeparatorWhitespace(text);
+  const allLabels = ["add new customer", "new customer", "create customer", "customer", "job", "title", "price", "total", "deposit", "due date", "due", "notes", "note"];
+
+  const customerQuery =
+    extractTaggedField(normalized, ["add new customer", "new customer", "create customer", "customer"], allLabels) ??
+    undefined;
+  const title = extractTaggedField(normalized, ["job", "title"], allLabels) ?? undefined;
+  const totalText = extractTaggedField(normalized, ["price", "total"], allLabels);
+  const depositText = extractTaggedField(normalized, ["deposit"], allLabels);
+  const dueDate = extractTaggedField(normalized, ["due date", "due"], allLabels) ?? undefined;
+  const notes = extractTaggedField(normalized, ["notes", "note"], allLabels) ?? undefined;
+
+  if (!customerQuery || !title || !totalText) {
+    return null;
+  }
+
+  return buildIntent("create_job", "high", {
+    customer_query: customerQuery,
+    title,
+    total_pence: parseMoneyToPence(totalText),
+    deposit_pence: depositText ? parseMoneyToPence(depositText) : undefined,
+    due_date: dueDate,
+    notes,
+    create_customer_if_missing: true
+  });
+};
+
 const resolvePartialCreateJobIntent = (text: string): IntentResolutionResult | null => {
   const customerAndTitle = text.match(
     /^(?:create|add|new)\s+job\s+(?:for\s+)?(.+?)\s+(?:called|title|job)\s+(.+)$/i
@@ -486,6 +576,18 @@ const resolvePartialUpdateJobStatusIntent = (text: string): IntentResolutionResu
 };
 
 const resolveExpenseIntent = (text: string): IntentResolutionResult | null => {
+  const structuredExpenseMatch = text.match(
+    /^(?:record|add|log)\s+expenses?\s*:\s*£?(-?\d+(?:\.\d{1,2})?)(?:\s*[,;]\s*(.+))?$/i
+  );
+  if (structuredExpenseMatch) {
+    const note = structuredExpenseMatch[2]?.trim();
+    return buildIntent("record_expense", "high", {
+      amount_pence: parseMoneyToPence(structuredExpenseMatch[1]),
+      note,
+      category: note
+    });
+  }
+
   const match =
     text.match(
       /^(?:record|add|log)\s+expense\s+£?(-?\d+(?:\.\d{1,2})?)(?:\s+for\s+(.+?))?(?:\s+at\s+(.+?))?(?:\s+on\s+(.+))?$/i
@@ -521,8 +623,10 @@ const resolvePartialExpenseIntent = (text: string): IntentResolutionResult | nul
 
 const resolveHighConfidenceIntent = (text: string): IntentResolutionResult | null => {
   return (
+    resolveStructuredCreateJobForNewCustomerIntent(text) ??
     resolveCustomerRecordsIntent(text) ??
     resolveCustomerPaymentIntent(text) ??
+    resolvePaymentListIntent(text) ??
     resolveExpenseListIntent(text) ??
     resolveVendorSummaryIntent(text) ??
     resolveExpensePdfIntent(text) ??
@@ -563,6 +667,10 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (/^(?:bring|show|get|list)\s+(?:my\s+)?(?:expense|expenses|spend|spending)\b/i.test(text)) {
     return buildIntent("expense_list", "medium", {});
+  }
+
+  if (/\b(today|yesterday|week|month)?\s*payments?\b/i.test(text) || /\bpayments?\s+(today|yesterday|this week|this month)\b/i.test(text)) {
+    return resolvePaymentListIntent(text);
   }
 
   if (/^(?:expense|expenses)\s+pdf$/i.test(text)) {

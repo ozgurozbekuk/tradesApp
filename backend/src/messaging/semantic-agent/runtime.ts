@@ -1,3 +1,4 @@
+// Implements the legacy semantic agent layer used by V1 messaging flows.
 import type { ParsedUserIntent } from "../agent/agent-types";
 import { IntentSchema, type ParsedIntent } from "../intents/schemas";
 import { VendorPaymentsService } from "../../services/vendor-payments.service";

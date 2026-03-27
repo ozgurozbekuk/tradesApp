@@ -1,3 +1,4 @@
+// Defines the schema expected from the Conversation V2 semantic front door.
 import { z } from "zod";
 import { workflowNameSchema } from "../state/state-schema";
 import {
@@ -11,6 +12,7 @@ import {
   exportRecordsPdfSlotsSchema,
   exportVendorPdfSlotsSchema,
   listTodayJobsSlotsSchema,
+  listPaymentsSlotsSchema,
   monthlySummarySlotsSchema,
   recordCustomerPaymentSlotsSchema,
   recordExpenseSlotsSchema,
@@ -35,6 +37,7 @@ const workflowMissingFieldSchemaMap = {
   record_customer_payment: z
     .array(z.enum(["customer_query", "amount_pence", "method", "note", "job_query"]))
     .optional(),
+  list_payments: z.array(z.enum(["range"])).optional(),
   expense_list: z.array(z.enum(["range"])).optional(),
   vendor_summary: z.array(z.enum(["days"])).optional(),
   export_records_pdf: z.array(z.enum(["customer_query"])).optional(),
@@ -71,6 +74,11 @@ export const semanticWorkflowIntentSchema = z.discriminatedUnion("workflow", [
     workflow: z.literal("record_customer_payment"),
     fields: recordCustomerPaymentSlotsSchema,
     missing_fields: workflowMissingFieldSchemaMap.record_customer_payment
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("list_payments"),
+    fields: listPaymentsSlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.list_payments
   }),
   semanticWorkflowIntentBaseSchema.extend({
     workflow: z.literal("expense_list"),

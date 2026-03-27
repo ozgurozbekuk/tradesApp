@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { JobStatus } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { calculateJobOutstandingPence } from "./job-outstanding";

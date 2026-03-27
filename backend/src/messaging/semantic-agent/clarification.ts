@@ -1,3 +1,4 @@
+// Implements the legacy semantic agent layer used by V1 messaging flows.
 import { buildClarificationQuestion } from "../agent/clarification-builder";
 import type { ParsedUserIntent } from "../agent/agent-types";
 import type { SemanticCapabilityName, SemanticDecision, StructuredClarificationReason } from "./types";

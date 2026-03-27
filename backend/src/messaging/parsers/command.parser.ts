@@ -1,3 +1,4 @@
+// Parses user messages into structured intents for the legacy messaging stack.
 import { PaymentMethod } from "@prisma/client";
 import { ParsedIntent } from "../intents/schemas";
 

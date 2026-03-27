@@ -1,3 +1,4 @@
+// Provides a backend service layer for a focused business domain.
 import { prisma } from "../db/prisma";
 
 export type VendorCandidate = {

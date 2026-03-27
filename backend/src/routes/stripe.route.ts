@@ -1,3 +1,4 @@
+// Defines an HTTP route module for the backend API.
 import { Router } from "express";
 import { SubscriptionService } from "../services/subscription.service";
 

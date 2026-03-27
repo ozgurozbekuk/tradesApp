@@ -1,3 +1,4 @@
+// Renders a top-level frontend page.
 import { SignUp, SignedIn, SignedOut } from "@clerk/clerk-react";
 import { Navigate } from "react-router-dom";
 import { Link } from "react-router-dom";

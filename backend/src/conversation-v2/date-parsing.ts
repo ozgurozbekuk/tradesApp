@@ -1,3 +1,4 @@
+// Parses natural-language dates used by Conversation V2 workflows.
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
   monday: 1,
@@ -79,6 +80,14 @@ export const parseConversationDate = (value: unknown, now: Date = new Date()) =>
     const weeks = Number.parseInt(weekMatch[1], 10);
     if (weeks > 0) {
       return addDays(now, weeks * 7);
+    }
+  }
+
+  const dayMatch = normalized.match(/^(?:in\s+)?(\d+)\s+days?$/);
+  if (dayMatch) {
+    const days = Number.parseInt(dayMatch[1], 10);
+    if (days > 0) {
+      return addDays(now, days);
     }
   }
 
