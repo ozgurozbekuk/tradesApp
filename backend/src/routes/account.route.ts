@@ -1,5 +1,5 @@
 // Defines an HTTP route module for the backend API.
-import { JobStatus } from "@prisma/client";
+import { JobStatus, PaymentMethod } from "@prisma/client";
 import { getAuth, requireAuth } from "@clerk/express";
 import { Router } from "express";
 import { env } from "../config/env";
@@ -537,6 +537,235 @@ accountRouter.get("/api/dashboard/lists", async (req, res) => {
       lastActivityAt: debt.transactions[0]?.occurredAt.toISOString() ?? null
     }))
   });
+});
+
+accountRouter.post("/api/customers", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+
+  if (!name) {
+    return res.status(400).json({ ok: false, error: "Customer name is required" });
+  }
+
+  if (phone) {
+    const duplicate = await prisma.customer.findFirst({
+      where: {
+        userId,
+        phone
+      },
+      select: { id: true }
+    });
+
+    if (duplicate) {
+      return res.status(409).json({ ok: false, error: "Phone already belongs to another customer" });
+    }
+  }
+
+  const customer = await prisma.customer.create({
+    data: {
+      userId,
+      name,
+      phone: phone || null
+    }
+  });
+
+  return res.status(201).json({ ok: true, customer });
+});
+
+accountRouter.post("/api/jobs", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const customerId = typeof req.body?.customerId === "string" ? req.body.customerId.trim() : "";
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const priceTotalPence = Number(req.body?.priceTotalPence);
+  const depositPence = Number(req.body?.depositPence ?? 0);
+  const dueDateRaw = typeof req.body?.dueDate === "string" ? req.body.dueDate.trim() : "";
+
+  if (!customerId || !title || !Number.isFinite(priceTotalPence) || priceTotalPence < 0 || !Number.isFinite(depositPence) || depositPence < 0) {
+    return res.status(400).json({ ok: false, error: "Valid customer, title, price and deposit are required" });
+  }
+
+  if (depositPence > priceTotalPence) {
+    return res.status(400).json({ ok: false, error: "Deposit cannot exceed total price" });
+  }
+
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: customerId,
+      userId
+    },
+    select: { id: true }
+  });
+
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: "Customer not found" });
+  }
+
+  const dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
+  if (dueDateRaw && (!dueDate || Number.isNaN(dueDate.getTime()))) {
+    return res.status(400).json({ ok: false, error: "Invalid due date" });
+  }
+
+  const initialOutstandingPence = Math.max(priceTotalPence - depositPence, 0);
+
+  const job = await prisma.$transaction(async (tx) => {
+    const createdJob = await tx.job.create({
+      data: {
+        userId,
+        customerId,
+        title,
+        dueDate,
+        priceTotalPence,
+        depositPence,
+        status: JobStatus.active
+      }
+    });
+
+    if (depositPence > 0) {
+      await tx.payment.create({
+        data: {
+          userId,
+          jobId: createdJob.id,
+          amountPence: depositPence,
+          method: PaymentMethod.unknown,
+          paidAt: new Date(),
+          note: "Deposit recorded on job creation"
+        }
+      });
+    }
+
+    if (initialOutstandingPence > 0) {
+      await tx.customer.update({
+        where: { id: customerId },
+        data: {
+          balancePence: {
+            increment: initialOutstandingPence
+          }
+        }
+      });
+    }
+
+    return createdJob;
+  });
+
+  return res.status(201).json({ ok: true, job });
+});
+
+accountRouter.post("/api/payments", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const jobId = typeof req.body?.jobId === "string" ? req.body.jobId.trim() : "";
+  const amountPence = Number(req.body?.amountPence);
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  const methodRaw = typeof req.body?.method === "string" ? req.body.method.trim() : "unknown";
+  const paidAtRaw = typeof req.body?.paidAt === "string" ? req.body.paidAt.trim() : "";
+
+  if (!jobId || !Number.isFinite(amountPence) || amountPence <= 0) {
+    return res.status(400).json({ ok: false, error: "Valid job and payment amount are required" });
+  }
+
+  if (!["cash", "bank", "card", "unknown"].includes(methodRaw)) {
+    return res.status(400).json({ ok: false, error: "Invalid payment method" });
+  }
+
+  const paidAt = paidAtRaw ? new Date(paidAtRaw) : new Date();
+  if (Number.isNaN(paidAt.getTime())) {
+    return res.status(400).json({ ok: false, error: "Invalid payment date" });
+  }
+
+  const job = await prisma.job.findFirst({
+    where: {
+      id: jobId,
+      userId
+    },
+    include: {
+      payments: true
+    }
+  });
+
+  if (!job) {
+    return res.status(404).json({ ok: false, error: "Job not found" });
+  }
+
+  const outstandingPence = Math.max(
+    job.priceTotalPence - job.payments.reduce((sum, payment) => sum + payment.amountPence, 0),
+    0
+  );
+
+  if (outstandingPence <= 0) {
+    return res.status(400).json({ ok: false, error: "Job has no outstanding balance" });
+  }
+
+  if (amountPence > outstandingPence) {
+    return res.status(400).json({ ok: false, error: "Payment exceeds outstanding balance" });
+  }
+
+  const payment = await prisma.$transaction(async (tx) => {
+    const createdPayment = await tx.payment.create({
+      data: {
+        userId,
+        jobId,
+        amountPence,
+        method: methodRaw as PaymentMethod,
+        paidAt,
+        note: note || null
+      }
+    });
+
+    if (job.customerId) {
+      await tx.customer.update({
+        where: { id: job.customerId },
+        data: {
+          balancePence: {
+            decrement: amountPence
+          }
+        }
+      });
+    }
+
+    return createdPayment;
+  });
+
+  return res.status(201).json({ ok: true, payment });
+});
+
+accountRouter.post("/api/expenses", async (req, res) => {
+  const auth = getAuth(req);
+  const clerkUserId = getRequiredClerkUserId({ userId: auth.userId });
+  const userId = await getRequiredAppUserId(clerkUserId);
+  const counterpartyName =
+    typeof req.body?.counterpartyName === "string" ? req.body.counterpartyName.trim() : "";
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  const amountPence = Number(req.body?.amountPence);
+  const occurredAtRaw = typeof req.body?.occurredAt === "string" ? req.body.occurredAt.trim() : "";
+
+  if (!counterpartyName || !note || !Number.isFinite(amountPence) || amountPence <= 0) {
+    return res.status(400).json({ ok: false, error: "Valid supplier, note and amount are required" });
+  }
+
+  const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : null;
+  if (!occurredAt || Number.isNaN(occurredAt.getTime())) {
+    return res.status(400).json({ ok: false, error: "Invalid expense date" });
+  }
+
+  const expense = await prisma.moneyTransaction.create({
+    data: {
+      userId,
+      kind: "expense_paid",
+      direction: "outflow",
+      amountPence,
+      counterpartyName,
+      note,
+      occurredAt
+    }
+  });
+
+  return res.status(201).json({ ok: true, expense });
 });
 
 accountRouter.patch("/api/customers/:customerId", async (req, res) => {

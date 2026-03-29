@@ -74,13 +74,16 @@ type ActivityItem = {
 };
 
 type CustomerEditorState = {
-  id: string;
+  mode: "create" | "edit";
+  id?: string;
   name: string;
   phone: string;
 };
 
 type JobEditorState = {
-  id: string;
+  mode: "create" | "edit";
+  id?: string;
+  customerId: string;
   title: string;
   status: string;
   priceTotal: string;
@@ -89,11 +92,20 @@ type JobEditorState = {
 };
 
 type ExpenseEditorState = {
-  id: string;
+  mode: "create" | "edit";
+  id?: string;
   counterpartyName: string;
   note: string;
   amount: string;
   occurredAt: string;
+};
+
+type PaymentEditorState = {
+  jobId: string;
+  amount: string;
+  method: string;
+  paidAt: string;
+  note: string;
 };
 
 type DeleteDialogState = {
@@ -513,6 +525,7 @@ const DashboardInner = () => {
   const [saving, setSaving] = useState(false);
   const [customerEditor, setCustomerEditor] = useState<CustomerEditorState | null>(null);
   const [jobEditor, setJobEditor] = useState<JobEditorState | null>(null);
+  const [paymentEditor, setPaymentEditor] = useState<PaymentEditorState | null>(null);
   const [expenseEditor, setExpenseEditor] = useState<ExpenseEditorState | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState | null>(null);
   const isCustomersView = location.pathname === "/customers";
@@ -590,6 +603,7 @@ const DashboardInner = () => {
   const closeDialogs = () => {
     setCustomerEditor(null);
     setJobEditor(null);
+    setPaymentEditor(null);
     setExpenseEditor(null);
     setDeleteDialog(null);
     setActionError("");
@@ -942,7 +956,51 @@ const DashboardInner = () => {
       .slice(0, 6);
   }, [filteredLists]);
 
-  const submitCustomerEdit = async () => {
+  const openCreateCustomer = () => {
+    setActionError("");
+    setCustomerEditor({
+      mode: "create",
+      name: "",
+      phone: ""
+    });
+  };
+
+  const openCreateJob = () => {
+    setActionError("");
+    setJobEditor({
+      mode: "create",
+      customerId: filteredLists?.customers[0]?.id ?? "",
+      title: "",
+      status: "active",
+      priceTotal: "",
+      deposit: "",
+      dueDate: ""
+    });
+  };
+
+  const openCreatePayment = () => {
+    setActionError("");
+    setPaymentEditor({
+      jobId: filteredLists?.jobs[0]?.id ?? "",
+      amount: "",
+      method: "bank",
+      paidAt: toDateInputValue(new Date().toISOString()),
+      note: ""
+    });
+  };
+
+  const openCreateExpense = () => {
+    setActionError("");
+    setExpenseEditor({
+      mode: "create",
+      counterpartyName: "",
+      note: "",
+      amount: "",
+      occurredAt: toDateInputValue(new Date().toISOString())
+    });
+  };
+
+  const submitCustomer = async () => {
     if (!customerEditor) {
       return;
     }
@@ -951,8 +1009,8 @@ const DashboardInner = () => {
     setActionError("");
 
     try {
-      await fetchProtected(`/api/customers/${customerEditor.id}`, {
-        method: "PATCH",
+      await fetchProtected(customerEditor.mode === "create" ? "/api/customers" : `/api/customers/${customerEditor.id}`, {
+        method: customerEditor.mode === "create" ? "POST" : "PATCH",
         body: JSON.stringify({
           name: customerEditor.name,
           phone: customerEditor.phone
@@ -961,13 +1019,19 @@ const DashboardInner = () => {
       await refreshDashboard();
       closeDialogs();
     } catch (submitError) {
-      setActionError(submitError instanceof Error ? submitError.message : "Could not update customer.");
+      setActionError(
+        submitError instanceof Error
+          ? submitError.message
+          : customerEditor.mode === "create"
+            ? "Could not create customer."
+            : "Could not update customer."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const submitJobEdit = async () => {
+  const submitJob = async () => {
     if (!jobEditor) {
       return;
     }
@@ -976,9 +1040,10 @@ const DashboardInner = () => {
     setActionError("");
 
     try {
-      await fetchProtected(`/api/jobs/${jobEditor.id}`, {
-        method: "PATCH",
+      await fetchProtected(jobEditor.mode === "create" ? "/api/jobs" : `/api/jobs/${jobEditor.id}`, {
+        method: jobEditor.mode === "create" ? "POST" : "PATCH",
         body: JSON.stringify({
+          customerId: jobEditor.customerId || null,
           title: jobEditor.title,
           status: jobEditor.status,
           priceTotalPence: Math.round(Number(jobEditor.priceTotal || 0) * 100),
@@ -989,13 +1054,47 @@ const DashboardInner = () => {
       await refreshDashboard();
       closeDialogs();
     } catch (submitError) {
-      setActionError(submitError instanceof Error ? submitError.message : "Could not update job.");
+      setActionError(
+        submitError instanceof Error
+          ? submitError.message
+          : jobEditor.mode === "create"
+            ? "Could not create job."
+            : "Could not update job."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const submitExpenseEdit = async () => {
+  const submitPayment = async () => {
+    if (!paymentEditor) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError("");
+
+    try {
+      await fetchProtected("/api/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: paymentEditor.jobId,
+          amountPence: Math.round(Number(paymentEditor.amount || 0) * 100),
+          method: paymentEditor.method,
+          paidAt: paymentEditor.paidAt,
+          note: paymentEditor.note
+        })
+      });
+      await refreshDashboard();
+      closeDialogs();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Could not log payment.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitExpense = async () => {
     if (!expenseEditor) {
       return;
     }
@@ -1004,8 +1103,8 @@ const DashboardInner = () => {
     setActionError("");
 
     try {
-      await fetchProtected(`/api/expenses/${expenseEditor.id}`, {
-        method: "PATCH",
+      await fetchProtected(expenseEditor.mode === "create" ? "/api/expenses" : `/api/expenses/${expenseEditor.id}`, {
+        method: expenseEditor.mode === "create" ? "POST" : "PATCH",
         body: JSON.stringify({
           counterpartyName: expenseEditor.counterpartyName,
           note: expenseEditor.note,
@@ -1016,7 +1115,13 @@ const DashboardInner = () => {
       await refreshDashboard();
       closeDialogs();
     } catch (submitError) {
-      setActionError(submitError instanceof Error ? submitError.message : "Could not update expense.");
+      setActionError(
+        submitError instanceof Error
+          ? submitError.message
+          : expenseEditor.mode === "create"
+            ? "Could not create expense."
+            : "Could not update expense."
+      );
     } finally {
       setSaving(false);
     }
@@ -1196,19 +1301,40 @@ const DashboardInner = () => {
                     <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                       {isReportsView ? "Last 30 Days" : "Export PDF"}
                     </button>
-                    <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(37,99,235,0.22)] transition hover:bg-blue-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isExpensesView) {
+                          openCreateExpense();
+                          return;
+                        }
+
+                        if (isPaymentsView) {
+                          openCreatePayment();
+                        }
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(37,99,235,0.22)] transition hover:bg-blue-700"
+                    >
                       <PlusIcon />
                       {isReportsView ? "Export Data" : isExpensesView ? "Add Expense" : "Log Payment"}
                     </button>
                   </>
                 ) : (
-                  <a
-                    href={isCustomersView ? "#customers-list" : "#jobs"}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isCustomersView) {
+                        openCreateCustomer();
+                        return;
+                      }
+
+                      openCreateJob();
+                    }}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(37,99,235,0.22)] transition hover:bg-blue-700"
                   >
                     <PlusIcon />
                     {isCustomersView ? "Add Customer" : "New Job"}
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
@@ -1753,6 +1879,7 @@ const DashboardInner = () => {
                                     onClick={() => {
                                       setActionError("");
                                       setExpenseEditor({
+                                        mode: "edit",
                                         id: expense.id,
                                         counterpartyName: expense.counterpartyName,
                                         note: expense.note,
@@ -1938,6 +2065,7 @@ const DashboardInner = () => {
                                     onClick={() => {
                                       setActionError("");
                                       setCustomerEditor({
+                                        mode: "edit",
                                         id: customer.id,
                                         name: customer.name,
                                         phone: customer.phone ?? ""
@@ -2076,7 +2204,9 @@ const DashboardInner = () => {
                                     onClick={() => {
                                       setActionError("");
                                       setJobEditor({
+                                        mode: "edit",
                                         id: job.id,
+                                        customerId: "",
                                         title: job.title,
                                         status: job.status,
                                         priceTotal: (job.priceTotalPence / 100).toFixed(2),
@@ -2411,8 +2541,12 @@ const DashboardInner = () => {
 
       {customerEditor ? (
         <ModalShell
-          title="Edit customer"
-          description="Update the customer details shown in your dashboard."
+          title={customerEditor.mode === "create" ? "Add customer" : "Edit customer"}
+          description={
+            customerEditor.mode === "create"
+              ? "Create a new customer record from the dashboard."
+              : "Update the customer details shown in your dashboard."
+          }
           onClose={closeDialogs}
         >
           <div className="space-y-4">
@@ -2443,11 +2577,11 @@ const DashboardInner = () => {
               </button>
               <button
                 type="button"
-                onClick={() => void submitCustomerEdit()}
+                onClick={() => void submitCustomer()}
                 disabled={saving}
                 className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? "Saving..." : customerEditor.mode === "create" ? "Create customer" : "Save changes"}
               </button>
             </div>
           </div>
@@ -2456,11 +2590,32 @@ const DashboardInner = () => {
 
       {jobEditor ? (
         <ModalShell
-          title="Edit job"
-          description="Update the job details from the jobs list."
+          title={jobEditor.mode === "create" ? "New job" : "Edit job"}
+          description={
+            jobEditor.mode === "create"
+              ? "Create a new job and assign it to an existing customer."
+              : "Update the job details from the jobs list."
+          }
           onClose={closeDialogs}
         >
           <div className="space-y-4">
+            {jobEditor.mode === "create" ? (
+              <label className="block text-sm font-medium text-slate-700">
+                Customer
+                <select
+                  value={jobEditor.customerId}
+                  onChange={(event) => setJobEditor({ ...jobEditor, customerId: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                >
+                  <option value="">Select a customer</option>
+                  {(lists?.customers ?? []).map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="block text-sm font-medium text-slate-700">
               Title
               <input
@@ -2527,11 +2682,100 @@ const DashboardInner = () => {
               </button>
               <button
                 type="button"
-                onClick={() => void submitJobEdit()}
+                onClick={() => void submitJob()}
                 disabled={saving}
                 className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? "Saving..." : jobEditor.mode === "create" ? "Create job" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {paymentEditor ? (
+        <ModalShell
+          title="Log payment"
+          description="Record a customer payment against one of your jobs."
+          onClose={closeDialogs}
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">
+              Job
+              <select
+                value={paymentEditor.jobId}
+                onChange={(event) => setPaymentEditor({ ...paymentEditor, jobId: event.target.value })}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+              >
+                <option value="">Select a job</option>
+                {(lists?.jobs ?? []).map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title} · {job.customerName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Amount (GBP)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paymentEditor.amount}
+                  onChange={(event) => setPaymentEditor({ ...paymentEditor, amount: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Payment method
+                <select
+                  value={paymentEditor.method}
+                  onChange={(event) => setPaymentEditor({ ...paymentEditor, method: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                >
+                  <option value="bank">Bank transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Date
+                <input
+                  type="date"
+                  value={paymentEditor.paidAt}
+                  onChange={(event) => setPaymentEditor({ ...paymentEditor, paidAt: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Note
+                <input
+                  value={paymentEditor.note}
+                  onChange={(event) => setPaymentEditor({ ...paymentEditor, note: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                />
+              </label>
+            </div>
+            {actionError ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</div> : null}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialogs}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitPayment()}
+                disabled={saving}
+                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Log payment"}
               </button>
             </div>
           </div>
@@ -2540,8 +2784,12 @@ const DashboardInner = () => {
 
       {expenseEditor ? (
         <ModalShell
-          title="Edit expense"
-          description="Update the supplier transaction details."
+          title={expenseEditor.mode === "create" ? "Add expense" : "Edit expense"}
+          description={
+            expenseEditor.mode === "create"
+              ? "Log a new supplier cost or outgoing expense."
+              : "Update the supplier transaction details."
+          }
           onClose={closeDialogs}
         >
           <div className="space-y-4">
@@ -2596,11 +2844,11 @@ const DashboardInner = () => {
               </button>
               <button
                 type="button"
-                onClick={() => void submitExpenseEdit()}
+                onClick={() => void submitExpense()}
                 disabled={saving}
                 className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? "Saving..." : expenseEditor.mode === "create" ? "Add expense" : "Save changes"}
               </button>
             </div>
           </div>
