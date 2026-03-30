@@ -134,6 +134,11 @@ const dayLabel = new Intl.DateTimeFormat("en-GB", {
   weekday: "short"
 });
 
+const getStartOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+const getLocalDateKey = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+
 const classNames = (...values: Array<string | false | null | undefined>) =>
   values.filter(Boolean).join(" ");
 
@@ -641,56 +646,62 @@ const DashboardInner = () => {
   }, [lists, search]);
 
   const weeklyIncome = useMemo(() => {
+    const today = getStartOfDay(new Date());
     const buckets = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - index));
+      const date = new Date(today);
+      date.setDate(today.getDate() - (6 - index));
       return {
-        key: date.toDateString(),
+        key: getLocalDateKey(date),
         label: dayLabel.format(date).toUpperCase(),
         value: 0
       };
     });
+    const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
 
-    filteredLists?.payments.forEach((payment) => {
-      const key = new Date(payment.paidAt).toDateString();
-      const bucket = buckets.find((entry) => entry.key === key);
+    lists?.payments.forEach((payment) => {
+      const key = getLocalDateKey(new Date(payment.paidAt));
+      const bucket = bucketMap.get(key);
       if (bucket) {
         bucket.value += payment.amountPence / 100;
       }
     });
 
     return buckets;
-  }, [filteredLists]);
+  }, [lists]);
 
   const monthlyComparison = useMemo(() => {
-    const map = new Map<string, { label: string; income: number; expenses: number }>();
+    const now = new Date();
+    const buckets = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+      return {
+        key: `${date.getFullYear()}-${date.getMonth()}`,
+        label: monthLabel.format(date).toUpperCase(),
+        income: 0,
+        expenses: 0
+      };
+    });
+    const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
 
-    filteredLists?.payments.forEach((payment) => {
+    lists?.payments.forEach((payment) => {
       const date = new Date(payment.paidAt);
       const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const current = map.get(key) ?? {
-        label: monthLabel.format(date).toUpperCase(),
-        income: 0,
-        expenses: 0
-      };
-      current.income += payment.amountPence / 100;
-      map.set(key, current);
+      const current = bucketMap.get(key);
+      if (current) {
+        current.income += payment.amountPence / 100;
+      }
     });
 
-    filteredLists?.expenses.forEach((expense) => {
+    lists?.expenses.forEach((expense) => {
       const date = new Date(expense.occurredAt);
       const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const current = map.get(key) ?? {
-        label: monthLabel.format(date).toUpperCase(),
-        income: 0,
-        expenses: 0
-      };
-      current.expenses += expense.amountPence / 100;
-      map.set(key, current);
+      const current = bucketMap.get(key);
+      if (current) {
+        current.expenses += expense.amountPence / 100;
+      }
     });
 
-    return Array.from(map.values()).slice(-6);
-  }, [filteredLists]);
+    return buckets;
+  }, [lists]);
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
     if (!filteredLists) {
@@ -761,14 +772,14 @@ const DashboardInner = () => {
     { key: "on hold", label: "On Hold" }
   ];
   const activeFinanceTab = location.hash === "#debts" ? "debts" : "payments";
-  const totalReceivedPence = filteredLists?.payments.reduce((sum, item) => sum + item.amountPence, 0) ?? 0;
-  const totalExpensesPence = filteredLists?.expenses.reduce((sum, item) => sum + item.amountPence, 0) ?? 0;
+  const totalReceivedPence = lists?.payments.reduce((sum, item) => sum + item.amountPence, 0) ?? 0;
+  const totalExpensesPence = lists?.expenses.reduce((sum, item) => sum + item.amountPence, 0) ?? 0;
   const currentMonthExpensesPence = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    return (filteredLists?.expenses ?? []).reduce((sum, expense) => {
+    return (lists?.expenses ?? []).reduce((sum, expense) => {
       const occurredAt = new Date(expense.occurredAt);
       if (occurredAt.getMonth() !== currentMonth || occurredAt.getFullYear() !== currentYear) {
         return sum;
@@ -776,7 +787,7 @@ const DashboardInner = () => {
 
       return sum + expense.amountPence;
     }, 0);
-  }, [filteredLists]);
+  }, [lists]);
   const outstandingReceivablesPence =
     filteredLists?.customers.reduce((sum, customer) => sum + Math.max(customer.outstandingPence, 0), 0) ?? 0;
   const overdueJobs = useMemo(
@@ -895,12 +906,38 @@ const DashboardInner = () => {
   }, [filteredLists]);
   const maxExpenseBucket = Math.max(expenseBuckets.weekly, expenseBuckets.monthly, expenseBuckets.older, 1);
   const weeklyIncomePence = Math.round(weeklyIncome.reduce((sum, item) => sum + item.value, 0) * 100);
+  const previousWeeklyIncomePence = useMemo(() => {
+    const today = getStartOfDay(new Date());
+    const currentWindowStart = new Date(today);
+    currentWindowStart.setDate(today.getDate() - 6);
+    const previousWindowStart = new Date(today);
+    previousWindowStart.setDate(today.getDate() - 13);
+
+    return (lists?.payments ?? []).reduce((sum, payment) => {
+      const paidAt = getStartOfDay(new Date(payment.paidAt));
+      if (paidAt < previousWindowStart || paidAt >= currentWindowStart) {
+        return sum;
+      }
+
+      return sum + payment.amountPence;
+    }, 0);
+  }, [lists]);
+  const weeklyIncomeDeltaPence = weeklyIncomePence - previousWeeklyIncomePence;
+  const hasWeeklyIncomeData = weeklyIncome.some((item) => item.value > 0);
+  const weeklyIncomeTrendLabel =
+    previousWeeklyIncomePence === 0
+      ? weeklyIncomePence > 0
+        ? "New income this week"
+        : "No income recorded"
+      : `${weeklyIncomeDeltaPence >= 0 ? "+" : ""}${Math.round(
+          (weeklyIncomeDeltaPence / previousWeeklyIncomePence) * 100
+        )}% vs previous 7 days`;
   const currentMonthIncomePence = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    return (filteredLists?.payments ?? []).reduce((sum, payment) => {
+    return (lists?.payments ?? []).reduce((sum, payment) => {
       const paidAt = new Date(payment.paidAt);
       if (paidAt.getMonth() !== currentMonth || paidAt.getFullYear() !== currentYear) {
         return sum;
@@ -908,7 +945,7 @@ const DashboardInner = () => {
 
       return sum + payment.amountPence;
     }, 0);
-  }, [filteredLists]);
+  }, [lists]);
   const currentMonthProfitPence = currentMonthIncomePence - currentMonthExpensesPence;
   const reportVolumePence = monthlyComparison.reduce(
     (sum, item) => sum + Math.round(item.income * 100) + Math.round(item.expenses * 100),
@@ -1178,7 +1215,7 @@ const DashboardInner = () => {
   const linePoints = weeklyIncome
     .map((item, index) => {
       const x = (index / Math.max(weeklyIncome.length - 1, 1)) * 100;
-      const y = 85 - (item.value / maxWeeklyIncome) * 55;
+      const y = hasWeeklyIncomeData ? 85 - (item.value / maxWeeklyIncome) * 55 : 85;
       return `${x},${y}`;
     })
     .join(" ");
@@ -2290,18 +2327,48 @@ const DashboardInner = () => {
                   subtitle="Revenue performance last 7 days"
                   right={
                     <div className="rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700">
-                      Last 7 Days
+                      {weeklyIncomeTrendLabel}
                     </div>
                   }
                 >
                   <div className="rounded-[22px] bg-[#f8fbff] p-4">
-                    <svg viewBox="0 0 100 100" className="h-56 w-full">
+                    <div className="mb-4 flex items-end justify-between gap-4">
+                      <div>
+                        <div className="text-3xl font-semibold tracking-tight text-slate-950">
+                          {pounds.format(weeklyIncomePence / 100)}
+                        </div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          {hasWeeklyIncomeData
+                            ? `${weeklyIncome.filter((item) => item.value > 0).length} day(s) with recorded payments`
+                            : "No payments recorded in the last 7 days"}
+                        </div>
+                      </div>
+                      <div className="text-right text-sm text-slate-500">
+                        <div>Previous 7 days</div>
+                        <div className="mt-1 font-semibold text-slate-700">
+                          {pounds.format(previousWeeklyIncomePence / 100)}
+                        </div>
+                      </div>
+                    </div>
+                    <svg viewBox="0 0 100 100" className="h-56 w-full" aria-label="Weekly income chart">
                       <defs>
                         <linearGradient id="income-fill" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.18" />
                           <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.02" />
                         </linearGradient>
                       </defs>
+                      {[25, 50, 75].map((y) => (
+                        <line
+                          key={y}
+                          x1="0"
+                          y1={y}
+                          x2="100"
+                          y2={y}
+                          stroke="#cbd5e1"
+                          strokeDasharray="2 3"
+                          strokeWidth="0.5"
+                        />
+                      ))}
                       <path d={`M ${areaPoints}`} fill="url(#income-fill)" />
                       <polyline
                         fill="none"
@@ -2313,7 +2380,7 @@ const DashboardInner = () => {
                       />
                       {weeklyIncome.map((item, index) => {
                         const x = (index / Math.max(weeklyIncome.length - 1, 1)) * 100;
-                        const y = 85 - (item.value / maxWeeklyIncome) * 55;
+                        const y = hasWeeklyIncomeData ? 85 - (item.value / maxWeeklyIncome) * 55 : 85;
                         return <circle key={item.key} cx={x} cy={y} r="1.25" fill="#1d4ed8" />;
                       })}
                     </svg>

@@ -80,6 +80,7 @@ export type WorkflowSlotsByName = {
   };
   create_job: {
     customer_query?: string;
+    customer_phone?: string;
     title?: string;
     total_pence?: number;
     deposit_pence?: number;

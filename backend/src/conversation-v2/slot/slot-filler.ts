@@ -37,7 +37,7 @@ const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
   create_customer: ["customer_name", "customer_phone", "notes"],
   record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
   record_vendor_payment: ["vendor_query", "amount_pence", "note", "occurred_on"],
-  create_job: ["customer_query", "title", "total_pence", "deposit_pence", "due_date", "notes", "create_customer_if_missing"],
+  create_job: ["customer_query", "customer_phone", "title", "total_pence", "deposit_pence", "due_date", "notes", "create_customer_if_missing"],
   update_job_status: ["job_query", "status"],
   list_today_jobs: ["scope"],
   record_expense: ["amount_pence", "category", "note", "occurred_on", "vendor_query"],

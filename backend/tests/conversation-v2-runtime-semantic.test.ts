@@ -1196,6 +1196,73 @@ test("runtime uses heuristic continuation fields for the same pending workflow",
   assert.equal(result.state.pendingFlow, undefined);
 });
 
+test("runtime drops stale expense vendor clarification when user starts a fresh plural expense command", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  const stateStore = createInMemoryConversationStateStore();
+  let capturedCounterpartyName: string | undefined;
+
+  await stateStore.save({
+    userId: "user-7b",
+    channel: "whatsapp",
+    lastMessageAt: new Date().toISOString(),
+    recentRefs: {},
+    version: "v2",
+    pendingFlow: {
+      id: "record_expense:MSG-old-6",
+      workflow: "record_expense",
+      step: "entity_resolution",
+      slots: {
+        amount_pence: 30000,
+        vendor_query: "john doe"
+      },
+      missingSlots: [],
+      entityState: {
+        status: "not_found",
+        unresolvedQuery: "john doe"
+      },
+      prompt: 'I could not find a vendor matching "john doe". You can give me a different vendor or continue without one.',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      topicShiftPolicy: "allow_strong_shift",
+      sourceMessageId: "MSG-old-6"
+    }
+  });
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-7b",
+      from: "+447000000017",
+      body: "add expenses 200",
+      messageSid: "MSG-SEM-7B"
+    },
+    {
+      stateStore,
+      services: {
+        ...buildServices(),
+        vendorPayments: {
+          addExpensePaid: async ({
+            counterpartyName
+          }: {
+            counterpartyName?: string;
+          }) => {
+            capturedCounterpartyName = counterpartyName;
+            return { id: "expense-2" };
+          }
+        }
+      } as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "record_expense");
+  assert.equal(result.reply, "Recorded expense of £200.00.");
+  assert.equal(capturedCounterpartyName, undefined);
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
 test("runtime answers basic greetings instead of marking them unsupported", async () => {
   ensureEnv();
   process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";

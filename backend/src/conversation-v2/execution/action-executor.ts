@@ -485,6 +485,7 @@ export const executeWorkflowAction = async (input: {
         const createdCustomer = await services.customers.upsertByPhoneOrName({
           userId: input.userId,
           name: customerQuery,
+          phone: typeof input.slots.customer_phone === "string" ? input.slots.customer_phone : undefined,
         });
         targetCustomerId = createdCustomer.id;
       }

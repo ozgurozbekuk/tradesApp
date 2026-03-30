@@ -89,6 +89,54 @@ const extractTaggedField = (text: string, labels: string[], allLabels: string[])
   return text.match(pattern)?.[1]?.trim();
 };
 
+const stripExpenseFieldSegment = (text: string, pattern: RegExp) => text.replace(pattern, " ").replace(/\s{2,}/g, " ").trim();
+
+const parseExpenseTail = (tail: string | undefined) => {
+  if (!tail) {
+    return {};
+  }
+
+  const normalizedTail = normalizeSeparatorWhitespace(tail);
+  const occurredOn =
+    extractTaggedField(normalizedTail, ["date", "on"], ["vendor", "supplier", "note", "category", "date", "on"]) ??
+    normalizedTail.match(/(?:^|[,;])\s*on\s+(.+)$/i)?.[1]?.trim();
+
+  let remaining = normalizedTail;
+  if (occurredOn) {
+    remaining = stripExpenseFieldSegment(remaining, /(?:^|[,;])\s*(?:date|on)\s*:\s*.+$/i);
+    remaining = stripExpenseFieldSegment(remaining, /(?:^|[,;])\s*on\s+.+$/i);
+  }
+
+  const vendorQuery =
+    extractTaggedField(remaining, ["vendor", "supplier"], ["vendor", "supplier", "note", "category", "date", "on"]) ??
+    remaining.match(/(?:^|[,;])\s*(?:at|from)\s+(.+?)(?=(?:\s*[,;]\s*(?:date|on)\b)|$)/i)?.[1]?.trim();
+
+  if (vendorQuery) {
+    remaining = stripExpenseFieldSegment(remaining, /(?:^|[,;])\s*(?:vendor|supplier)\s*:\s*.+$/i);
+    remaining = stripExpenseFieldSegment(remaining, /(?:^|[,;])\s*(?:at|from)\s+.+$/i);
+  }
+
+  const taggedNote = extractTaggedField(
+    remaining,
+    ["note", "category"],
+    ["vendor", "supplier", "note", "category", "date", "on"]
+  );
+
+  if (taggedNote) {
+    remaining = stripExpenseFieldSegment(remaining, /(?:^|[,;])\s*(?:note|category)\s*:\s*.+$/i);
+  }
+
+  const freeformNote = remaining.replace(/^[,;\s]+/, "").replace(/^for\s+/i, "").trim() || undefined;
+  const note = taggedNote ?? freeformNote;
+
+  return {
+    note,
+    category: note,
+    vendor_query: vendorQuery,
+    occurred_on: occurredOn
+  };
+};
+
 const extractStatus = (text: string) => {
   const match = text.match(/\b(active|completed|canceled)\b/i);
   return match?.[1]?.toLowerCase() as "active" | "completed" | "canceled" | undefined;
@@ -489,10 +537,32 @@ const resolveStructuredCreateJobForNewCustomerIntent = (text: string): IntentRes
   }
 
   const normalized = normalizeSeparatorWhitespace(text);
-  const allLabels = ["add new customer", "new customer", "create customer", "customer", "job", "title", "price", "total", "deposit", "due date", "due", "notes", "note"];
+  const allLabels = [
+    "add new customer",
+    "new customer",
+    "create customer",
+    "customer",
+    "job",
+    "title",
+    "price",
+    "total",
+    "deposit",
+    "due date",
+    "due",
+    "notes",
+    "note",
+    "phone number",
+    "phone num",
+    "phone",
+    "number",
+    "mobile"
+  ];
 
   const customerQuery =
     extractTaggedField(normalized, ["add new customer", "new customer", "create customer", "customer"], allLabels) ??
+    undefined;
+  const customerPhone =
+    extractTaggedField(normalized, ["phone number", "phone num", "phone", "number", "mobile"], allLabels) ??
     undefined;
   const title = extractTaggedField(normalized, ["job", "title"], allLabels) ?? undefined;
   const totalText = extractTaggedField(normalized, ["price", "total"], allLabels);
@@ -506,6 +576,7 @@ const resolveStructuredCreateJobForNewCustomerIntent = (text: string): IntentRes
 
   return buildIntent("create_job", "high", {
     customer_query: customerQuery,
+    customer_phone: customerPhone,
     title,
     total_pence: parseMoneyToPence(totalText),
     deposit_pence: depositText ? parseMoneyToPence(depositText) : undefined,
@@ -580,41 +651,39 @@ const resolveExpenseIntent = (text: string): IntentResolutionResult | null => {
     /^(?:record|add|log)\s+expenses?\s*:\s*£?(-?\d+(?:\.\d{1,2})?)(?:\s*[,;]\s*(.+))?$/i
   );
   if (structuredExpenseMatch) {
-    const note = structuredExpenseMatch[2]?.trim();
     return buildIntent("record_expense", "high", {
       amount_pence: parseMoneyToPence(structuredExpenseMatch[1]),
-      note,
-      category: note
+      ...parseExpenseTail(structuredExpenseMatch[2])
     });
   }
 
   const match =
     text.match(
-      /^(?:record|add|log)\s+expense\s+£?(-?\d+(?:\.\d{1,2})?)(?:\s+for\s+(.+?))?(?:\s+at\s+(.+?))?(?:\s+on\s+(.+))?$/i
+      /^(?:record|add|log)\s+expenses?\s+£?(-?\d+(?:\.\d{1,2})?)(.*)$/i
     ) ??
-    text.match(/^(?:expense)\s+£?(-?\d+(?:\.\d{1,2})?)(?:\s+for\s+(.+?))?(?:\s+at\s+(.+?))?(?:\s+on\s+(.+))?$/i);
+    text.match(/^(?:expenses?)\s+£?(-?\d+(?:\.\d{1,2})?)(.*)$/i);
   if (!match) {
     return null;
   }
 
+  const tailFields = parseExpenseTail(match[2]);
+
   return buildIntent("record_expense", "high", {
     amount_pence: parseMoneyToPence(match[1]),
-    category: match[2]?.trim(),
-    note: match[2]?.trim(),
-    vendor_query: match[3]?.trim(),
-    occurred_on: match[4]?.trim() ?? extractOccurredOn(text)
+    ...tailFields,
+    occurred_on: tailFields.occurred_on ?? extractOccurredOn(text)
   });
 };
 
 const resolvePartialExpenseIntent = (text: string): IntentResolutionResult | null => {
-  const vendorOnly = text.match(/^(?:record|add|log)\s+expense\s+(?:at|for)\s+(.+)$/i);
+  const vendorOnly = text.match(/^(?:record|add|log)\s+expenses?\s+(?:at|for)\s+(.+)$/i);
   if (vendorOnly) {
     return buildIntent("record_expense", "medium", {
       note: vendorOnly[1].trim()
     });
   }
 
-  if (/^(?:record|add|log)\s+expense$/i.test(text)) {
+  if (/^(?:record|add|log)\s+expenses?$/i.test(text)) {
     return buildIntent("record_expense", "medium", {});
   }
 

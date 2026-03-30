@@ -200,6 +200,11 @@ export const recordVendorPaymentSlotsSchema = z
 export const createJobSlotsSchema = z
   .object({
     customer_query: z.string().min(1).optional(),
+    customer_phone: z
+      .string()
+      .transform((value) => value.replace(/\D/g, ""))
+      .refine((value) => value.length >= 7, "customer_phone must contain at least 7 digits")
+      .optional(),
     title: z.string().min(1).optional(),
     total_pence: z.number().int().nonnegative().optional(),
     deposit_pence: z.number().int().nonnegative().optional(),
