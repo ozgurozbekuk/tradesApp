@@ -17,6 +17,7 @@ export const WORKFLOW_NAMES = [
   "list_today_jobs",
   "record_expense",
   "daily_summary",
+  "weekly_summary",
   "monthly_summary"
 ] as const;
 
@@ -90,6 +91,7 @@ export type WorkflowSlotsByName = {
   };
   update_job_status: {
     job_query?: string;
+    apply_to_all?: boolean;
     status?: "active" | "completed" | "canceled";
   };
   list_today_jobs: {
@@ -104,6 +106,9 @@ export type WorkflowSlotsByName = {
   };
   daily_summary: {
     scope?: "daily";
+  };
+  weekly_summary: {
+    scope?: "week";
   };
   monthly_summary: {
     month?: number;
@@ -201,6 +206,32 @@ export type RecentRefs = Partial<{
   jobTitle: string;
 }>;
 
+export type BackgroundTaskStatus =
+  | "queued"
+  | "running"
+  | "waiting_user"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type BackgroundTaskKind = "workflow_execution" | "follow_up";
+
+export type BackgroundTask = {
+  id: string;
+  kind: BackgroundTaskKind;
+  status: BackgroundTaskStatus;
+  workflow?: WorkflowName;
+  ownerAgent: "router_agent" | "qa_agent" | "function_calling_agent";
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  sourceMessageId?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  resultPreview?: string;
+  errorMessage?: string;
+ };
+
 export type PendingFlowByName = {
   [TWorkflow in WorkflowName]: {
     id: string;
@@ -227,6 +258,7 @@ export type ConversationStateV2 = {
   lastMessageAt: string;
   recentRefs: RecentRefs;
   pendingFlow?: PendingFlow;
+  backgroundTask?: BackgroundTask;
   lastCompletedWorkflow?: WorkflowName;
   version: "v2";
 };

@@ -104,7 +104,7 @@ export const resolveWorkflowConfirmation = async (input: {
         type: "required",
         confirmation: {
           type: "confirm_cancel_job",
-          prompt: "Are you sure you want to cancel this job?",
+          prompt: input.slots.apply_to_all === true ? "Are you sure you want to cancel all jobs?" : "Are you sure you want to cancel this job?",
           payload: {
             jobId:
               input.entityState.status === "resolved" ? input.entityState.resolvedIds.jobId : undefined,
@@ -119,6 +119,7 @@ export const resolveWorkflowConfirmation = async (input: {
     case "list_today_jobs":
     case "record_expense":
     case "daily_summary":
+    case "weekly_summary":
     case "monthly_summary":
       return { type: "none" };
   }

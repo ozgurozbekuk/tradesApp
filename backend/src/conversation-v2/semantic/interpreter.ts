@@ -52,32 +52,36 @@ export const callConversationV2SemanticOpenAi: ConversationV2SemanticLlmCaller =
   }
 
   const model = env.LLM_MODEL || "gpt-4o-mini";
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.LLM_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: input.systemPrompt },
-        { role: "user", content: input.userPrompt }
-      ]
-    })
-  });
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.LLM_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: input.userPrompt }
+        ]
+      })
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
+    const content = data.choices?.[0]?.message?.content;
+    return content ? parseJsonObject(content) : null;
+  } catch {
     return null;
   }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string | null } }>;
-  };
-  const content = data.choices?.[0]?.message?.content;
-  return content ? parseJsonObject(content) : null;
 };
 
 export const interpretConversationV2Semantically = async (

@@ -142,6 +142,9 @@ const extractStatus = (text: string) => {
   return match?.[1]?.toLowerCase() as "active" | "completed" | "canceled" | undefined;
 };
 
+const referencesAllJobs = (text: string) =>
+  /\b(?:all jobs?|every job|all of them)\b/i.test(text.trim());
+
 const extractMonthYear = (text: string) => {
   const numericMonthMatch = text.match(/\b(1[0-2]|0?[1-9])[/-](\d{4})\b/);
   if (numericMonthMatch) {
@@ -414,7 +417,10 @@ const resolveListTodayJobsIntent = (text: string): IntentResolutionResult | null
 };
 
 const resolveDailySummaryIntent = (text: string): IntentResolutionResult | null => {
-  if (!/\b(daily summary|summary today|today summary|end of day summary)\b/i.test(text)) {
+  if (
+    !/\b(daily summary|summary today|today summary|end of day summary|today'?s? summary)\b/i.test(text) &&
+    !/\b(how much (?:did|do) (?:i|we) (?:make|earn|earned)(?: today)?|what (?:did|do) (?:i|we) (?:make|earn|earned)(?: today)?)\b/i.test(text)
+  ) {
     return null;
   }
 
@@ -423,8 +429,24 @@ const resolveDailySummaryIntent = (text: string): IntentResolutionResult | null 
   });
 };
 
+const resolveWeeklySummaryIntent = (text: string): IntentResolutionResult | null => {
+  if (
+    !/\b(weekly summary|week summary|this week summary|summary this week|summary last week|last week summary)\b/i.test(text) &&
+    !/\b(how much (?:did|do) (?:i|we) (?:make|earn|earned) (?:this|last) week|what (?:did|do) (?:i|we) (?:make|earn|earned) (?:this|last) week)\b/i.test(text)
+  ) {
+    return null;
+  }
+
+  return buildIntent("weekly_summary", "high", {
+    scope: "week"
+  });
+};
+
 const resolveMonthlySummaryIntent = (text: string): IntentResolutionResult | null => {
-  if (!/\b(monthly summary|month summary|this month summary|summary this month)\b/i.test(text)) {
+  if (
+    !/\b(monthly summary|month summary|this month summary|summary this month|summary last month|last month summary)\b/i.test(text) &&
+    !/\b(how much (?:did|do) (?:i|we) (?:make|earn|earned) (?:this|last) month|how much (?:i|we) (?:made|make|earned|earn) (?:this|last) month|what (?:did|do) (?:i|we) (?:make|earn|earned) (?:this|last) month)\b/i.test(text)
+  ) {
     return null;
   }
 
@@ -609,30 +631,55 @@ const resolvePartialCreateJobIntent = (text: string): IntentResolutionResult | n
 
 const resolveUpdateJobStatusIntent = (text: string): IntentResolutionResult | null => {
   const status = extractStatus(text);
-  if (!status) {
-    return null;
+  if (status && referencesAllJobs(text)) {
+    return buildIntent("update_job_status", "high", {
+      apply_to_all: true,
+      status
+    });
   }
 
   const match =
     text.match(/^(?:mark|set|update)\s+(.+?)\s+(?:as\s+)?(active|completed|canceled)$/i) ??
     text.match(/^(?:job\s+)?(.+?)\s+(?:is\s+)?(active|completed|canceled)$/i);
-  if (!match) {
-    return null;
+  if (match) {
+    return buildIntent("update_job_status", "high", {
+      job_query: match[1].trim(),
+      status: match[2].toLowerCase() as "active" | "completed" | "canceled"
+    });
   }
 
-  return buildIntent("update_job_status", "high", {
-    job_query: match[1].trim(),
-    status: match[2].toLowerCase() as "active" | "completed" | "canceled"
-  });
+  const completionMatch = text.match(/^(?:complete|finish|close)\s+(.+)$/i);
+  if (completionMatch) {
+    const target = completionMatch[1].trim();
+    return buildIntent("update_job_status", "high", {
+      ...(referencesAllJobs(target) ? { apply_to_all: true } : { job_query: target }),
+      status: "completed"
+    });
+  }
+
+  return null;
 };
 
 const resolvePartialUpdateJobStatusIntent = (text: string): IntentResolutionResult | null => {
   const status = extractStatus(text);
   if (status && /^(?:mark|set|update)\b/i.test(text)) {
-    const withoutStatus = text.replace(/\b(active|completed|canceled)\b/i, "").replace(/^(?:mark|set|update)\s*/i, "").replace(/\bas\s*$/i, "").trim();
+    const withoutStatus = text
+      .replace(/\b(active|completed|canceled)\b/i, "")
+      .replace(/^(?:mark|set|update)\s*/i, "")
+      .replace(/^(?:to|the)\b\s*/i, "")
+      .replace(/\bas\s*$/i, "")
+      .trim();
     return buildIntent("update_job_status", "medium", {
-      job_query: withoutStatus || undefined,
+      ...(referencesAllJobs(withoutStatus) ? { apply_to_all: true } : { job_query: withoutStatus || undefined }),
       status
+    });
+  }
+
+  if (/^(?:complete|finish|close)\b/i.test(text)) {
+    const jobQuery = text.replace(/^(?:complete|finish|close)\s*/i, "").trim();
+    return buildIntent("update_job_status", "medium", {
+      ...(referencesAllJobs(jobQuery) ? { apply_to_all: true } : { job_query: jobQuery || undefined }),
+      status: "completed"
     });
   }
 
@@ -704,6 +751,7 @@ const resolveHighConfidenceIntent = (text: string): IntentResolutionResult | nul
     resolveCreateInvoiceIntent(text) ??
     resolveListTodayJobsIntent(text) ??
     resolveDailySummaryIntent(text) ??
+    resolveWeeklySummaryIntent(text) ??
     resolveMonthlySummaryIntent(text) ??
     resolveCreateCustomerIntent(text) ??
     resolveVendorDebtIntent(text) ??
@@ -719,6 +767,10 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
 
   if (normalized === "daily summary" || normalized === "today summary") {
     return buildIntent("daily_summary", "medium", { scope: "daily" });
+  }
+
+  if (normalized === "weekly summary" || normalized === "this week summary" || normalized === "summary last week") {
+    return buildIntent("weekly_summary", "medium", { scope: "week" });
   }
 
   if (normalized === "monthly summary" || normalized === "this month summary") {
@@ -780,7 +832,7 @@ const resolveMediumConfidenceIntent = (text: string): IntentResolutionResult | n
     return resolvePartialCreateJobIntent(text);
   }
 
-  if (/^(?:mark|set|update)\b/i.test(text)) {
+  if (/^(?:mark|set|update|complete|finish|close)\b/i.test(text)) {
     return resolvePartialUpdateJobStatusIntent(text);
   }
 

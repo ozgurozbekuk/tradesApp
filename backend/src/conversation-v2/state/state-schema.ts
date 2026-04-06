@@ -19,6 +19,7 @@ export const workflowNameSchema = z.enum([
   "list_today_jobs",
   "record_expense",
   "daily_summary",
+  "weekly_summary",
   "monthly_summary"
 ]);
 
@@ -38,6 +39,33 @@ export const recentRefsSchema = z.object({
   vendorName: z.string().optional(),
   jobId: z.string().optional(),
   jobTitle: z.string().optional()
+});
+
+export const backgroundTaskStatusSchema = z.enum([
+  "queued",
+  "running",
+  "waiting_user",
+  "completed",
+  "failed",
+  "canceled"
+]);
+
+export const backgroundTaskKindSchema = z.enum(["workflow_execution", "follow_up"]);
+
+export const backgroundTaskSchema = z.object({
+  id: z.string(),
+  kind: backgroundTaskKindSchema,
+  status: backgroundTaskStatusSchema,
+  workflow: workflowNameSchema.optional(),
+  ownerAgent: z.enum(["router_agent", "qa_agent", "function_calling_agent"]),
+  summary: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  sourceMessageId: z.string().optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  resultPreview: z.string().optional(),
+  errorMessage: z.string().optional()
 });
 
 export const entityCandidateSchema = z.object({
@@ -227,6 +255,7 @@ export const createJobSlotsSchema = z
 export const updateJobStatusSlotsSchema = z
   .object({
     job_query: z.string().min(1).optional(),
+    apply_to_all: z.boolean().optional(),
     status: jobStatusSchema.optional()
   })
   .strict();
@@ -250,6 +279,12 @@ export const recordExpenseSlotsSchema = z
 export const dailySummarySlotsSchema = z
   .object({
     scope: z.literal("daily").optional()
+  })
+  .strict();
+
+export const weeklySummarySlotsSchema = z
+  .object({
+    scope: z.literal("week").optional()
   })
   .strict();
 
@@ -278,6 +313,7 @@ export const workflowSlotsSchemaMap = {
   list_today_jobs: listTodayJobsSlotsSchema,
   record_expense: recordExpenseSlotsSchema,
   daily_summary: dailySummarySlotsSchema,
+  weekly_summary: weeklySummarySlotsSchema,
   monthly_summary: monthlySummarySlotsSchema
 } as const;
 
@@ -365,7 +401,7 @@ export const pendingFlowSchema = z.discriminatedUnion("workflow", [
   pendingFlowBaseSchema.extend({
     workflow: z.literal("update_job_status"),
     slots: updateJobStatusSlotsSchema,
-    missingSlots: z.array(z.enum(["job_query", "status"]))
+    missingSlots: z.array(z.enum(["job_query", "apply_to_all", "status"]))
   }),
   pendingFlowBaseSchema.extend({
     workflow: z.literal("list_today_jobs"),
@@ -383,6 +419,11 @@ export const pendingFlowSchema = z.discriminatedUnion("workflow", [
     missingSlots: z.array(z.enum(["scope"]))
   }),
   pendingFlowBaseSchema.extend({
+    workflow: z.literal("weekly_summary"),
+    slots: weeklySummarySlotsSchema,
+    missingSlots: z.array(z.enum(["scope"]))
+  }),
+  pendingFlowBaseSchema.extend({
     workflow: z.literal("monthly_summary"),
     slots: monthlySummarySlotsSchema,
     missingSlots: z.array(z.enum(["month", "year"]))
@@ -395,6 +436,7 @@ export const conversationStateV2Schema = z.object({
   lastMessageAt: z.string(),
   recentRefs: recentRefsSchema,
   pendingFlow: pendingFlowSchema.optional(),
+  backgroundTask: backgroundTaskSchema.optional(),
   lastCompletedWorkflow: workflowNameSchema.optional(),
   version: z.literal("v2")
 });
@@ -402,6 +444,9 @@ export const conversationStateV2Schema = z.object({
 export type WorkflowNameSchema = z.infer<typeof workflowNameSchema>;
 export type PendingFlowStepSchema = z.infer<typeof pendingFlowStepSchema>;
 export type RecentRefsSchema = z.infer<typeof recentRefsSchema>;
+export type BackgroundTaskStatusSchema = z.infer<typeof backgroundTaskStatusSchema>;
+export type BackgroundTaskKindSchema = z.infer<typeof backgroundTaskKindSchema>;
+export type BackgroundTaskSchema = z.infer<typeof backgroundTaskSchema>;
 export type EntityResolutionResultSchema = z.infer<typeof entityResolutionResultSchema>;
 export type ConfirmationStateSchema = z.infer<typeof confirmationStateSchema>;
 export type CustomerRecordsSlotsSchema = z.infer<typeof customerRecordsSlotsSchema>;
@@ -421,6 +466,7 @@ export type UpdateJobStatusSlotsSchema = z.infer<typeof updateJobStatusSlotsSche
 export type ListTodayJobsSlotsSchema = z.infer<typeof listTodayJobsSlotsSchema>;
 export type RecordExpenseSlotsSchema = z.infer<typeof recordExpenseSlotsSchema>;
 export type DailySummarySlotsSchema = z.infer<typeof dailySummarySlotsSchema>;
+export type WeeklySummarySlotsSchema = z.infer<typeof weeklySummarySlotsSchema>;
 export type MonthlySummarySlotsSchema = z.infer<typeof monthlySummarySlotsSchema>;
 export type PendingFlowSchema = z.infer<typeof pendingFlowSchema>;
 export type ConversationStateV2Schema = z.infer<typeof conversationStateV2Schema>;

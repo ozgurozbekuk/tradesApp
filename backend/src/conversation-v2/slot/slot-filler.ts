@@ -17,10 +17,11 @@ const REQUIRED_SLOTS: Record<WorkflowName, string[]> = {
   record_vendor_debt: ["amount_pence", "vendor_query"],
   record_vendor_payment: ["amount_pence", "vendor_query"],
   create_job: ["customer_query", "title", "total_pence"],
-  update_job_status: ["job_query", "status"],
+  update_job_status: ["status"],
   list_today_jobs: [],
   record_expense: ["amount_pence"],
   daily_summary: [],
+  weekly_summary: [],
   monthly_summary: []
 };
 
@@ -38,10 +39,11 @@ const WORKFLOW_SLOT_KEYS: Record<WorkflowName, string[]> = {
   record_vendor_debt: ["vendor_query", "amount_pence", "note", "occurred_on"],
   record_vendor_payment: ["vendor_query", "amount_pence", "note", "occurred_on"],
   create_job: ["customer_query", "customer_phone", "title", "total_pence", "deposit_pence", "due_date", "notes", "create_customer_if_missing"],
-  update_job_status: ["job_query", "status"],
+  update_job_status: ["job_query", "apply_to_all", "status"],
   list_today_jobs: ["scope"],
   record_expense: ["amount_pence", "category", "note", "occurred_on", "vendor_query"],
   daily_summary: ["scope"],
+  weekly_summary: ["scope"],
   monthly_summary: ["month", "year"]
 };
 
@@ -59,6 +61,8 @@ const hasValue = (value: unknown) => {
 
   return value !== undefined && value !== null;
 };
+
+const isAllJobsSelection = (value: string) => /^(?:all jobs?|every job|all of them|everything)$/i.test(value.trim());
 
 const parseCurrencyToPence = (text: string) => {
   const normalized = text.replace(/,/g, "").trim();
@@ -157,7 +161,12 @@ const filterWorkflowFields = (workflow: WorkflowName, fields: Record<string, unk
   );
 
 const computeMissingSlots = (workflow: WorkflowName, slots: Record<string, unknown>) =>
-  REQUIRED_SLOTS[workflow].filter((slot) => !hasValue(slots[slot]));
+  workflow === "update_job_status"
+    ? [
+        ...REQUIRED_SLOTS[workflow].filter((slot) => !hasValue(slots[slot])),
+        ...(!hasValue(slots.job_query) && slots.apply_to_all !== true ? ["job_query"] : [])
+      ]
+    : REQUIRED_SLOTS[workflow].filter((slot) => !hasValue(slots[slot]));
 
 const validateWorkflowSlots = (workflow: WorkflowName, slots: Record<string, unknown>) => {
   const schema = workflowSlotsSchemaMap[workflow];
@@ -215,6 +224,14 @@ export const mergePendingFlowSlots = (
     }
   }
 
+  if (
+    pendingFlow.workflow === "update_job_status" &&
+    pendingFlow.missingSlots.includes("job_query") &&
+    nextFields.apply_to_all === true
+  ) {
+    mergedIntoMissingOnly.apply_to_all = true;
+  }
+
   return buildSlotFillResult(pendingFlow.workflow, mergedIntoMissingOnly);
 };
 
@@ -224,6 +241,12 @@ export const extractContinuationFields = (pendingFlow: PendingFlow, rawText: str
   }
 
   const [slot] = pendingFlow.missingSlots;
+  if (pendingFlow.workflow === "update_job_status" && slot === "job_query" && isAllJobsSelection(rawText)) {
+    return {
+      apply_to_all: true
+    };
+  }
+
   const value = parseContinuationValue(slot, rawText);
   if (!hasValue(value)) {
     return {};

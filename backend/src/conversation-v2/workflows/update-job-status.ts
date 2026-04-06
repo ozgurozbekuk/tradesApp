@@ -1,6 +1,6 @@
 // Declares the slot contract for a single Conversation V2 workflow.
 export const updateJobStatusWorkflow = {
   name: "update_job_status",
-  requiredSlots: ["job_query", "status"] as const,
-  optionalSlots: [] as const
+  requiredSlots: ["status"] as const,
+  optionalSlots: ["job_query", "apply_to_all"] as const
 };

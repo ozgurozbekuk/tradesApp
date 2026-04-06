@@ -1,5 +1,5 @@
 // Provides state storage helpers for Conversation V2 conversations.
-import type { ConversationStateV2, PendingFlow } from "../engine/contracts";
+import type { BackgroundTask, ConversationStateV2, PendingFlow } from "../engine/contracts";
 import { conversationStateV2Schema } from "./state-schema";
 
 export const CONVERSATION_V2_STATE_NAMESPACE = "conversation-v2";
@@ -34,6 +34,11 @@ const isPendingFlowExpired = (pendingFlow: PendingFlow, now: Date) => {
   return expiresAt <= now.getTime();
 };
 
+const isBackgroundTaskTerminal = (backgroundTask: BackgroundTask) =>
+  backgroundTask.status === "completed" ||
+  backgroundTask.status === "failed" ||
+  backgroundTask.status === "canceled";
+
 export const createEmptyConversationStateV2 = (userId: string): ConversationStateV2 => ({
   userId,
   channel: "whatsapp",
@@ -47,14 +52,18 @@ export const normalizeConversationStateV2 = (
   now: Date = new Date()
 ): ConversationStateV2 => {
   const parsed = conversationStateV2Schema.parse(state);
+  const pendingFlowExpired = Boolean(parsed.pendingFlow && isPendingFlowExpired(parsed.pendingFlow, now));
+  const completedBackgroundTask =
+    parsed.backgroundTask && isBackgroundTaskTerminal(parsed.backgroundTask) ? parsed.backgroundTask : undefined;
 
-  if (!parsed.pendingFlow || !isPendingFlowExpired(parsed.pendingFlow, now)) {
+  if (!pendingFlowExpired && !completedBackgroundTask) {
     return parsed;
   }
 
   return {
     ...parsed,
-    pendingFlow: undefined
+    pendingFlow: pendingFlowExpired ? undefined : parsed.pendingFlow,
+    backgroundTask: completedBackgroundTask
   };
 };
 

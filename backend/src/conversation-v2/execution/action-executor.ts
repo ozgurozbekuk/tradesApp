@@ -523,6 +523,23 @@ export const executeWorkflowAction = async (input: {
     }
 
     case "update_job_status": {
+      const nextStatus = String(input.slots.status ?? "active") as JobStatus;
+      if (input.slots.apply_to_all === true) {
+        const updatedCount = await services.jobs.updateAllJobStatuses({
+          userId: input.userId,
+          status: nextStatus
+        });
+
+        return {
+          workflow: input.workflow,
+          reply:
+            updatedCount > 0
+              ? `Updated ${updatedCount} jobs to ${nextStatus}.`
+              : `There were no jobs to update to ${nextStatus}.`,
+          completed: true
+        };
+      }
+
       const jobId = getResolvedId(input.entityState, "jobId");
       if (!jobId) {
         return {
@@ -535,7 +552,7 @@ export const executeWorkflowAction = async (input: {
       const job = await services.jobs.updateJobStatus({
         userId: input.userId,
         jobId,
-        status: String(input.slots.status ?? "active") as JobStatus
+        status: nextStatus
       });
 
       if (!job) {
@@ -605,6 +622,15 @@ export const executeWorkflowAction = async (input: {
       return {
         workflow: input.workflow,
         reply: buildSummaryReply("Daily summary", summary),
+        completed: true
+      };
+    }
+
+    case "weekly_summary": {
+      const summary = await services.reports.getSummary(input.userId, "7d");
+      return {
+        workflow: input.workflow,
+        reply: buildSummaryReply("Weekly summary", summary),
         completed: true
       };
     }

@@ -578,6 +578,61 @@ test("runtime handles casual small talk as bounded chat", async () => {
   assert.match(result.reply, /I'm good and ready to help\./);
 });
 
+test("runtime responds empathetically to low-mood chat instead of returning a generic capability line", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-chat-low-mood-1",
+      from: "+447000000121",
+      body: "i am not feeling good today",
+      messageSid: "MSG-CHAT-LOW-MOOD-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildServices()
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, undefined);
+  assert.match(result.reply, /rough day/i);
+});
+
+test("runtime sends fresh chat turns to the semantic front door before bounded-chat fallback", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  let semanticCalls = 0;
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-chat-semantic-first-1",
+      from: "+447000000120",
+      body: "how are you today",
+      messageSid: "MSG-CHAT-SEM-FIRST-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildServices(),
+      semanticLlmCaller: async () => {
+        semanticCalls += 1;
+        return {
+          kind: "respond",
+          message: "I'm good and ready to help."
+        };
+      }
+    }
+  );
+
+  assert.equal(semanticCalls, 1);
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, undefined);
+  assert.equal(result.reply, "I'm good and ready to help.");
+});
+
 test("runtime keeps task execution but adds a conversational tone for mixed messages", async () => {
   ensureEnv();
   process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
@@ -665,6 +720,52 @@ test("runtime completes vendor summary through semantic front door", async () =>
   assert.equal(result.workflow, "vendor_summary");
   assert.match(result.reply, /Vendor 30d: outstanding £550.00/);
   assert.match(result.reply, /expenses £120.00/);
+});
+
+test("runtime supports natural weekly summary phrasing", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-weekly-summary-1",
+      from: "+447000000122",
+      body: "summary last week",
+      messageSid: "MSG-WEEKLY-SUMMARY-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildSummaryServices()
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "weekly_summary");
+  assert.match(result.reply, /^Weekly summary:/);
+});
+
+test("runtime supports natural monthly earnings phrasing", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-monthly-summary-1",
+      from: "+447000000123",
+      body: "how much we earned last month",
+      messageSid: "MSG-MONTHLY-SUMMARY-1"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: buildSummaryServices()
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "monthly_summary");
+  assert.match(result.reply, /^Monthly summary:/);
 });
 
 test("runtime completes full records pdf export through semantic front door", async () => {
@@ -1260,6 +1361,101 @@ test("runtime drops stale expense vendor clarification when user starts a fresh 
   assert.equal(result.workflow, "record_expense");
   assert.equal(result.reply, "Recorded expense of £200.00.");
   assert.equal(capturedCounterpartyName, undefined);
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime completes all jobs from a fresh bulk status command", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  let updatedCount = 0;
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-7c",
+      from: "+447000000018",
+      body: "complete all jobs",
+      messageSid: "MSG-SEM-7C"
+    },
+    {
+      stateStore: createInMemoryConversationStateStore(),
+      services: {
+        ...buildServices(),
+        jobs: {
+          updateAllJobStatuses: async () => {
+            updatedCount = 3;
+            return updatedCount;
+          }
+        }
+      } as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "update_job_status");
+  assert.equal(result.reply, "Updated 3 jobs to completed.");
+  assert.equal(updatedCount, 3);
+  assert.equal(result.state.pendingFlow, undefined);
+});
+
+test("runtime accepts all jobs as the answer to a pending job status clarification", async () => {
+  ensureEnv();
+  process.env.USE_V2_SEMANTIC_FRONT_DOOR = "false";
+  const { runConversationV2Turn } = await import("../src/conversation-v2/engine/runtime");
+  const stateStore = createInMemoryConversationStateStore();
+  let updatedCount = 0;
+
+  await stateStore.save({
+    userId: "user-7d",
+    channel: "whatsapp",
+    lastMessageAt: new Date().toISOString(),
+    recentRefs: {},
+    version: "v2",
+    pendingFlow: {
+      id: "update_job_status:MSG-old-7",
+      workflow: "update_job_status",
+      step: "slot_filling",
+      slots: {
+        status: "completed"
+      },
+      missingSlots: ["job_query"],
+      entityState: {
+        status: "idle"
+      },
+      prompt: "Which specific job do you want to update to completed status?",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      topicShiftPolicy: "allow_strong_shift",
+      sourceMessageId: "MSG-old-7"
+    }
+  });
+
+  const result = await runConversationV2Turn(
+    {
+      userId: "user-7d",
+      from: "+447000000019",
+      body: "all jobs",
+      messageSid: "MSG-SEM-7D"
+    },
+    {
+      stateStore,
+      services: {
+        ...buildServices(),
+        jobs: {
+          updateAllJobStatuses: async () => {
+            updatedCount = 2;
+            return updatedCount;
+          }
+        }
+      } as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services
+    }
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.workflow, "update_job_status");
+  assert.equal(result.reply, "Updated 2 jobs to completed.");
+  assert.equal(updatedCount, 2);
   assert.equal(result.state.pendingFlow, undefined);
 });
 

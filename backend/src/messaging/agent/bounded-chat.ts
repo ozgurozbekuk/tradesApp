@@ -24,6 +24,7 @@ const APP_CAPABILITY_PATTERN =
 
 const THANKS_PATTERN = /\b(thanks|thank you|cheers|nice one|appreciate it)\b/i;
 const HOW_ARE_YOU_PATTERN = /\b(how are you|how's it going|hows it going|you good|are you okay)\b/i;
+const LOW_MOOD_PATTERN = /\b(i am not feeling good|i'm not feeling good|not feeling good|feeling bad|feeling low|rough day|bad day|not great today)\b/i;
 const GREETING_PATTERN = /^(hi|hello|hey|morning|good morning|afternoon|good afternoon|evening|good evening)\b/i;
 const AFFIRMATION_PATTERN = /^(ok|okay|cool|sounds good|alright|all good|great)\b/i;
 const OUT_OF_SCOPE_PATTERN =
@@ -38,6 +39,12 @@ const fallbackBoundedReply = (input: BoundedChatInput): string | null => {
   if (HOW_ARE_YOU_PATTERN.test(text)) {
     return clip(
       `I'm good and ready to help. I can keep things moving on jobs, customers, payments, invoices, expenses, and follow-ups.`
+    );
+  }
+
+  if (LOW_MOOD_PATTERN.test(text)) {
+    return clip(
+      `Sorry you're having a rough day. If you want, give me one thing to handle and I'll keep the admin side moving for you.`
     );
   }
 

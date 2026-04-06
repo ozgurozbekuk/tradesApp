@@ -46,6 +46,7 @@ const WORKFLOW_LABELS: Record<WorkflowName, string> = {
   list_today_jobs: "today's jobs",
   record_expense: "expense logging",
   daily_summary: "daily summary",
+  weekly_summary: "weekly summary",
   monthly_summary: "monthly summary"
 };
 

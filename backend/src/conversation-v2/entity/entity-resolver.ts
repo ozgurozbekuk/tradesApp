@@ -172,8 +172,15 @@ const resolveVendorEntity = async (input: {
 const resolveJobEntity = async (input: {
   userId: string;
   jobQuery?: string;
+  applyToAll?: boolean;
   recentRefs: RecentRefs;
 }): Promise<EntityResolverResult> => {
+  if (input.applyToAll) {
+    return {
+      status: "idle"
+    };
+  }
+
   const rawQuery = input.jobQuery?.trim();
 
   if (!rawQuery) {
@@ -458,6 +465,7 @@ export const resolveWorkflowEntities = async (input: {
     case "vendor_summary":
     case "list_today_jobs":
     case "daily_summary":
+    case "weekly_summary":
     case "monthly_summary":
       return {
         status: "idle"
@@ -497,6 +505,7 @@ export const resolveWorkflowEntities = async (input: {
       return resolveJobEntity({
         userId: input.userId,
         jobQuery: typeof input.slots.job_query === "string" ? input.slots.job_query : undefined,
+        applyToAll: input.slots.apply_to_all === true,
         recentRefs: input.recentRefs
       });
 

@@ -18,7 +18,8 @@ import {
   recordVendorDebtSlotsSchema,
   recordVendorPaymentSlotsSchema,
   updateJobStatusSlotsSchema,
-  vendorSummarySlotsSchema
+  vendorSummarySlotsSchema,
+  weeklySummarySlotsSchema
 } from "../state/state-schema";
 
 const intentBaseSchema = z.object({
@@ -93,6 +94,10 @@ export const workflowIntentSchema = z.discriminatedUnion("workflow", [
   intentBaseSchema.extend({
     workflow: z.literal("daily_summary"),
     fields: dailySummarySlotsSchema
+  }),
+  intentBaseSchema.extend({
+    workflow: z.literal("weekly_summary"),
+    fields: weeklySummarySlotsSchema
   }),
   intentBaseSchema.extend({
     workflow: z.literal("monthly_summary"),

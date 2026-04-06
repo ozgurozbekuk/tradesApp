@@ -171,6 +171,30 @@ test("intent resolver parses plan today as the today jobs workflow", async () =>
   assert.equal(result.intent.fields.scope, "today");
 });
 
+test("intent resolver parses bulk job completion phrasing", async () => {
+  ensureEnv();
+  const intentResolverModule = await import("../src/conversation-v2/intent/intent-resolver");
+  const resolveIntentV2 =
+    "resolveIntentV2" in intentResolverModule
+      ? intentResolverModule.resolveIntentV2
+      : intentResolverModule.default.resolveIntentV2;
+
+  const commands = ["mark to the completed all jobs", "complete all jobs"];
+  for (const text of commands) {
+    const result = await resolveIntentV2({ text });
+
+    assert.equal(result.type, "intent");
+    if (result.type !== "intent") {
+      continue;
+    }
+
+    assert.equal(result.intent.workflow, "update_job_status");
+    assert.equal(result.intent.fields.apply_to_all, true);
+    assert.equal(result.intent.fields.status, "completed");
+    assert.equal(result.intent.fields.job_query, undefined);
+  }
+});
+
 test("create_job execution creates missing customer when explicitly requested", async () => {
   ensureEnv();
   const actionExecutorModule = await import("../src/conversation-v2/execution/action-executor");
@@ -294,4 +318,45 @@ test("customer records execution includes recent jobs in the reply", async () =>
   assert.equal(result.completed, true);
   assert.match(result.reply, /Customer record for Lenin/);
   assert.match(result.reply, /Recent jobs: Garden cleaning \(active, due 2026-03-30\)\./);
+});
+
+test("update job status execution can complete all jobs", async () => {
+  ensureEnv();
+  const actionExecutorModule = await import("../src/conversation-v2/execution/action-executor");
+  const executeWorkflowAction =
+    "executeWorkflowAction" in actionExecutorModule
+      ? actionExecutorModule.executeWorkflowAction
+      : actionExecutorModule.default.executeWorkflowAction;
+  let capturedStatus: string | undefined;
+
+  const result = await executeWorkflowAction({
+    userId: "user-1",
+    workflow: "update_job_status",
+    slots: {
+      apply_to_all: true,
+      status: "completed"
+    },
+    entityState: {
+      status: "idle"
+    },
+    services: {
+      users: {},
+      customers: {},
+      jobs: {
+        updateAllJobStatuses: async ({ status }: { status: string }) => {
+          capturedStatus = status;
+          return 4;
+        }
+      },
+      payments: {},
+      reports: {},
+      reminders: {},
+      vendorPayments: {},
+      exports: {}
+    } as unknown as import("../src/conversation-v2/adapters/services").ConversationV2Services
+  });
+
+  assert.equal(result.completed, true);
+  assert.equal(result.reply, "Updated 4 jobs to completed.");
+  assert.equal(capturedStatus, "completed");
 });

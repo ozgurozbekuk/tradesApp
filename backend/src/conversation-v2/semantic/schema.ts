@@ -19,7 +19,8 @@ import {
   recordVendorDebtSlotsSchema,
   recordVendorPaymentSlotsSchema,
   updateJobStatusSlotsSchema,
-  vendorSummarySlotsSchema
+  vendorSummarySlotsSchema,
+  weeklySummarySlotsSchema
 } from "../state/state-schema";
 
 export const semanticModeSchema = z.enum(["fresh", "continue_pending"]);
@@ -50,10 +51,11 @@ const workflowMissingFieldSchemaMap = {
   create_job: z
     .array(z.enum(["customer_query", "title", "total_pence", "deposit_pence", "due_date", "notes"]))
     .optional(),
-  update_job_status: z.array(z.enum(["job_query", "status"])).optional(),
+  update_job_status: z.array(z.enum(["job_query", "apply_to_all", "status"])).optional(),
   list_today_jobs: z.array(z.enum(["scope"])).optional(),
   record_expense: z.array(z.enum(["amount_pence", "category", "note", "occurred_on", "vendor_query"])).optional(),
   daily_summary: z.array(z.enum(["scope"])).optional(),
+  weekly_summary: z.array(z.enum(["scope"])).optional(),
   monthly_summary: z.array(z.enum(["month", "year"])).optional()
 } as const;
 
@@ -149,6 +151,11 @@ export const semanticWorkflowIntentSchema = z.discriminatedUnion("workflow", [
     workflow: z.literal("daily_summary"),
     fields: dailySummarySlotsSchema,
     missing_fields: workflowMissingFieldSchemaMap.daily_summary
+  }),
+  semanticWorkflowIntentBaseSchema.extend({
+    workflow: z.literal("weekly_summary"),
+    fields: weeklySummarySlotsSchema,
+    missing_fields: workflowMissingFieldSchemaMap.weekly_summary
   }),
   semanticWorkflowIntentBaseSchema.extend({
     workflow: z.literal("monthly_summary"),

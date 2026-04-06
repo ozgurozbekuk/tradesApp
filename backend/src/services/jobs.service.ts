@@ -272,6 +272,25 @@ export class JobsService {
     });
   }
 
+  async updateAllJobStatuses(input: { userId: string; status: JobStatus }) {
+    const result = await prisma.job.updateMany({
+      where: {
+        userId: input.userId,
+        status:
+          input.status === JobStatus.completed
+            ? JobStatus.active
+            : {
+                not: input.status
+              }
+      },
+      data: {
+        status: input.status
+      }
+    });
+
+    return result.count;
+  }
+
   async closeActiveJobsByCustomerId(input: { userId: string; customerId: string }) {
     const result = await prisma.job.updateMany({
       where: {
