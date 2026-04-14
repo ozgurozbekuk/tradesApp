@@ -266,6 +266,95 @@ test("create_job execution creates missing customer when explicitly requested", 
   assert.equal(dueDateDeltaDays, 7);
 });
 
+test("create_job entity resolution uses strict customer matching for explicit new customer requests", async () => {
+  ensureEnv();
+  const customersServiceModule = await import("../src/services/customers.service");
+  const entityResolverModule = await import("../src/conversation-v2/entity/entity-resolver");
+  const resolveWorkflowEntities =
+    "resolveWorkflowEntities" in entityResolverModule
+      ? entityResolverModule.resolveWorkflowEntities
+      : entityResolverModule.default.resolveWorkflowEntities;
+  const strictOriginal = customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates;
+  const broadOriginal = customersServiceModule.CustomersService.prototype.listResolutionCandidates;
+
+  customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates = async () => [];
+  customersServiceModule.CustomersService.prototype.listResolutionCandidates = async () => [
+    {
+      id: "customer-john",
+      name: "John Doe",
+      phone: null,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
+      latestActiveJobTitle: "Boiler repair"
+    }
+  ];
+
+  try {
+    const result = await resolveWorkflowEntities({
+      userId: "user-1",
+      workflow: "create_job",
+      slots: {
+        customer_query: "Jane Doe",
+        title: "Painting 2 rooms",
+        total_pence: 40000,
+        create_customer_if_missing: true
+      },
+      recentRefs: {}
+    });
+
+    assert.deepEqual(result, {
+      status: "not_found",
+      unresolvedQuery: "Jane Doe"
+    });
+  } finally {
+    customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates = strictOriginal;
+    customersServiceModule.CustomersService.prototype.listResolutionCandidates = broadOriginal;
+  }
+});
+
+test("create_job entity resolution still resolves exact customer matches for explicit new customer requests", async () => {
+  ensureEnv();
+  const customersServiceModule = await import("../src/services/customers.service");
+  const entityResolverModule = await import("../src/conversation-v2/entity/entity-resolver");
+  const resolveWorkflowEntities =
+    "resolveWorkflowEntities" in entityResolverModule
+      ? entityResolverModule.resolveWorkflowEntities
+      : entityResolverModule.default.resolveWorkflowEntities;
+  const strictOriginal = customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates;
+
+  customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates = async () => [
+    {
+      id: "customer-jane",
+      name: "Jane Doe",
+      phone: null,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
+      latestActiveJobTitle: null
+    }
+  ];
+
+  try {
+    const result = await resolveWorkflowEntities({
+      userId: "user-1",
+      workflow: "create_job",
+      slots: {
+        customer_query: "Jane Doe",
+        title: "Painting 2 rooms",
+        total_pence: 40000,
+        create_customer_if_missing: true
+      },
+      recentRefs: {}
+    });
+
+    assert.deepEqual(result, {
+      status: "resolved",
+      resolvedIds: {
+        customerId: "customer-jane"
+      }
+    });
+  } finally {
+    customersServiceModule.CustomersService.prototype.listStrictResolutionCandidates = strictOriginal;
+  }
+});
+
 test("customer records execution includes recent jobs in the reply", async () => {
   ensureEnv();
   const actionExecutorModule = await import("../src/conversation-v2/execution/action-executor");

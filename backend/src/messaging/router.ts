@@ -27,9 +27,7 @@ import { resolveCustomerQuery, resolveJobQuery } from "./agent/entity-resolver";
 import { buildCommandGuide } from "./agent/command-guide";
 import { buildBoundedAssistantReply } from "./agent/bounded-chat";
 import { AgentLearningService } from "../services/agent-learning.service";
-import { selectAgentFlow } from "./agent-first/flow-selector";
 import { env } from "../config/env";
-import { buildPlanTodayToolExecutor } from "./agent-first/agent-first-runtime";
 import { interpretWithSemanticAgent } from "./semantic-agent/interpreter";
 import { resolveSemanticCapability } from "./semantic-agent/runtime";
 import { buildSemanticClarification } from "./semantic-agent/clarification";
@@ -199,6 +197,37 @@ const buildJobReminderDraft = (input: {
     "Please let me know if anything changes.",
     "Thank you."
   ].join("\n");
+};
+
+const buildPlanTodayReply = async (input: {
+  userId: string;
+  timezone?: string | null;
+}) => {
+  const plan = await remindersService.buildTodayPlan({
+    userId: input.userId,
+    timezone: input.timezone || env.APP_TZ
+  });
+
+  const lines = [
+    `Today looks like ${plan.scheduledToday} booked job${plan.scheduledToday === 1 ? "" : "s"}, ${plan.dueSoonCount} due soon, and ${plan.overdueCount} overdue.`,
+    `Outstanding payments sit at ${penceToPounds(plan.outstandingTotalPence)}.`
+  ];
+
+  if (plan.todayJobs.length) {
+    const jobs = plan.todayJobs
+      .slice(0, 3)
+      .map((job) => `${job.customerName} - ${job.title}`)
+      .join(" | ");
+    lines.push(`Today's jobs: ${jobs}.`);
+  }
+
+  if (plan.overdueCount > 0) {
+    lines.push("Start with the overdue work first, then the jobs already booked for today.");
+  } else if (plan.dueSoonCount > 0) {
+    lines.push("Priority should be today's bookings first, then anything due soon.");
+  }
+
+  return lines.join(" ");
 };
 
 const EXPLICIT_ALL_RECORDS_PATTERN =
@@ -1911,25 +1940,14 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     conversationMemory.getAgentParseContext(message.from),
     await agentLearningService.getLearnedParseContext(user.id)
   );
-  const selectedFlow = selectAgentFlow(env.USE_AGENT_FIRST_ORCHESTRATION === true);
+  const useSemanticMessagingFlow = env.USE_AGENT_FIRST_ORCHESTRATION === true;
   let bodyForInterpretation = body;
   let parseResult:
     | Awaited<ReturnType<typeof parseWithAgentLayer>>
     | null = null;
 
   parseResult = tryResolvePriorityPendingVendorDebtFollowUp(body, parseContext);
-
-  const planTodayExecutor =
-    selectedFlow === "agent_first"
-      ? buildPlanTodayToolExecutor({
-          getTodayPlan: ({ timezone }) =>
-            remindersService.buildTodayPlan({
-              userId: user.id,
-              timezone: timezone || user.timezone || env.APP_TZ
-            })
-        })
-      : undefined;
-  if (selectedFlow === "agent_first" && !parseResult) {
+  if (useSemanticMessagingFlow && !parseResult) {
     const dialogResult = await manageDialogTurn({
       message: body,
       context: parseContext
@@ -2016,18 +2034,18 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     }
   }
   const semanticResult =
-    selectedFlow === "agent_first" && !parseResult
+    useSemanticMessagingFlow && !parseResult
       ? await interpretWithSemanticAgent({
           message: bodyForInterpretation,
           context: parseContext
         })
       : null;
 
-  if (selectedFlow === "agent_first") {
+  if (useSemanticMessagingFlow) {
     emitAgentEvent("agent.flow.selected", requestId, {
       from: message.from,
       messageSid: message.messageSid,
-      flow: "agent_first",
+      flow: "semantic_router",
       resultStatus: semanticResult?.status ?? "unknown"
     });
   }
@@ -2056,11 +2074,11 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
 
   parseResult =
     parseResult ??
-    (selectedFlow === "agent_first" && env.AGENT_LEGACY_FALLBACK_ENABLED !== true
+    (useSemanticMessagingFlow && env.AGENT_LEGACY_FALLBACK_ENABLED !== true
       ? null
       : await parseWithAgentLayer(bodyForInterpretation, parseContext));
 
-  if (selectedFlow === "agent_first" && semanticResult?.status === "decision") {
+  if (useSemanticMessagingFlow && semanticResult?.status === "decision") {
     const resolution = await resolveSemanticCapability({
       userId: user.id,
       capability: semanticResult.decision.capability,
@@ -2085,15 +2103,12 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     }
 
     if (semanticResult.decision.capability === "plan_today") {
-      const planTodayResult = planTodayExecutor
-        ? await planTodayExecutor({ toolName: "planToday", toolInput: {} })
-        : { status: "not_handled" as const };
-
-      if (planTodayResult.status === "handled") {
-        return {
-          reply: planTodayResult.reply
-        };
-      }
+      return {
+        reply: await buildPlanTodayReply({
+          userId: user.id,
+          timezone: user.timezone || env.APP_TZ
+        })
+      };
     }
 
     if (resolution.intent) {
@@ -2111,7 +2126,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
     }
   }
 
-  if (selectedFlow === "agent_first" && !parseResult) {
+  if (useSemanticMessagingFlow && !parseResult) {
     const boundedReply = await buildBoundedAssistantReply({
       message: body,
       businessName: user.businessName,
@@ -2135,7 +2150,7 @@ export const routeIncomingMessage = async (message: IncomingMessage): Promise<Ro
   emitAgentEvent("agent.parse.result", requestId, {
     from: message.from,
     messageSid: message.messageSid,
-    flow: selectedFlow,
+    flow: useSemanticMessagingFlow ? "semantic_router" : "server_first",
     status: effectiveParseResult.status,
     source: effectiveParseResult.status === "intent" ? effectiveParseResult.source : null,
     confidence: effectiveParseResult.status === "intent" ? effectiveParseResult.confidence : null,

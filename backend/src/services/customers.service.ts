@@ -26,6 +26,14 @@ export type CustomerPdfCandidate = {
 };
 
 export class CustomersService {
+  normalizeName(input: string) {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/[’']/g, "'")
+      .replace(/\s+/g, " ");
+  }
+
   normalizePhone(input: string) {
     const trimmed = input.trim();
     const hasPlus = trimmed.startsWith("+");
@@ -277,6 +285,73 @@ export class CustomersService {
         latestActiveJobTitle: customer.jobs[0]?.title ?? null
       }))
     );
+  }
+
+  async listStrictResolutionCandidates(input: {
+    userId: string;
+    query: string;
+    phone?: string;
+    take?: number;
+  }): Promise<CustomerPdfCandidate[]> {
+    const normalizedQuery = this.normalizeName(input.query);
+    const normalizedPhone = input.phone ? this.normalizePhone(input.phone) : null;
+
+    const customers = await prisma.customer.findMany({
+      where: {
+        userId: input.userId,
+        OR: normalizedPhone
+          ? [
+              {
+                phone: normalizedPhone
+              },
+              {
+                name: {
+                  equals: input.query.trim(),
+                  mode: "insensitive"
+                }
+              }
+            ]
+          : [
+              {
+                name: {
+                  equals: input.query.trim(),
+                  mode: "insensitive"
+                }
+              }
+            ]
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        createdAt: true,
+        jobs: {
+          select: {
+            title: true
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 1
+        }
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: input.take ?? 20
+    });
+
+    return customers
+      .filter((customer) => {
+        if (normalizedPhone && customer.phone === normalizedPhone) {
+          return true;
+        }
+
+        return this.normalizeName(customer.name) === normalizedQuery;
+      })
+      .map((customer) => ({
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        createdAt: customer.createdAt,
+        latestActiveJobTitle: customer.jobs[0]?.title ?? null
+      }));
   }
 
   findPdfCandidatesByExactName(input: {

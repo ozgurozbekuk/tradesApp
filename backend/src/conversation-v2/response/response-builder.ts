@@ -54,10 +54,14 @@ export const buildUnsupportedReply = () =>
   [
     "I did not understand that request yet.",
     "Try one of these:",
-    "- create customer John",
-    "- bring John records",
-    "- create invoice for John",
+    "- create customer [Name]",
+    "- create job for [Name] called [Job Title] price 400",
+    "- bring [Name] records",
+    "- create invoice for [Name]",
+    "- [Name] paid 250",
     "- add expense 400 for cleaning staff",
+    "- show payments today",
+    "- show expenses this week",
     "- show today jobs",
     "- summary today"
   ].join("\n");

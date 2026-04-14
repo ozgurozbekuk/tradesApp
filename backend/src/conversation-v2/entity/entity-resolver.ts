@@ -98,12 +98,21 @@ const isReferentialJobQuery = (value: string) =>
 const resolveCustomerEntity = async (input: {
   userId: string;
   customerQuery: string;
+  strict?: boolean;
+  customerPhone?: string;
 }): Promise<EntityResolverResult> => {
-  const candidates = await customersService.listResolutionCandidates({
-    userId: input.userId,
-    query: input.customerQuery,
-    take: 8
-  });
+  const candidates = input.strict
+    ? await customersService.listStrictResolutionCandidates({
+        userId: input.userId,
+        query: input.customerQuery,
+        phone: input.customerPhone,
+        take: 8
+      })
+    : await customersService.listResolutionCandidates({
+        userId: input.userId,
+        query: input.customerQuery,
+        take: 8
+      });
 
   if (!candidates.length) {
     return {
@@ -497,7 +506,10 @@ export const resolveWorkflowEntities = async (input: {
 
       return resolveCustomerEntity({
         userId: input.userId,
-        customerQuery
+        customerQuery,
+        strict: input.slots.create_customer_if_missing === true,
+        customerPhone:
+          typeof input.slots.customer_phone === "string" ? input.slots.customer_phone : undefined
       });
     }
 
