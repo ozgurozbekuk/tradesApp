@@ -2,12 +2,22 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { UsersService } from "./users.service";
+import type { ConversationMessage } from "../agent/conversationInput";
 
 const usersService = new UsersService();
 
 const findUserIdByPhone = async (phone: string) => {
   const user = await usersService.findByPhone(phone);
   return user?.id ?? null;
+};
+
+const getStringField = (value: Prisma.JsonValue, key: string) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const field = value[key as keyof typeof value];
+  return typeof field === "string" ? field : null;
 };
 
 export const logInboundMessage = async (input: {
@@ -83,4 +93,44 @@ export const logUserAction = async (input: {
       metadataJson: input.metadata
     }
   });
+};
+
+export const getRecentConversationHistory = async (input: {
+  userId: string;
+  limit?: number;
+  excludeInboundMessageSid?: string;
+}): Promise<ConversationMessage[]> => {
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      userId: input.userId,
+      action: {
+        in: ["whatsapp.inbound", "whatsapp.outbound"]
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    },
+    take: input.limit ?? 12
+  });
+
+  return logs
+    .reverse()
+    .flatMap<ConversationMessage>((log) => {
+      if (log.action === "whatsapp.inbound") {
+        const messageSid = getStringField(log.metadataJson, "messageSid");
+        if (input.excludeInboundMessageSid && messageSid === input.excludeInboundMessageSid) {
+          return [];
+        }
+
+        const body = getStringField(log.metadataJson, "body");
+        return body ? [{ role: "user" as const, content: body }] : [];
+      }
+
+      if (log.action === "whatsapp.outbound") {
+        const body = getStringField(log.metadataJson, "body");
+        return body ? [{ role: "assistant" as const, content: body }] : [];
+      }
+
+      return [];
+    });
 };

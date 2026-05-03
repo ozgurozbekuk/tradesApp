@@ -1,6 +1,0 @@
-// Declares the slot contract for a single Conversation V2 workflow.
-export const exportExpensePdfWorkflow = {
-  name: "export_expense_pdf",
-  requiredSlots: [] as const,
-  optionalSlots: [] as const
-};

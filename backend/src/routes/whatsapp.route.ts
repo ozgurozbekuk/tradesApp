@@ -1,9 +1,9 @@
 // Defines an HTTP route module for the backend API.
 import { Router } from "express";
+import { agentConversationStateStore } from "../agent/state/state-store";
 import { env } from "../config/env";
 import { sendWhatsAppMessage, validateTwilioSignature } from "../integrations/twilio";
-import { conversationMemory } from "../messaging/agent/context-memory";
-import { routeIncomingMessageWithConversationV2 } from "../conversation-v2/router";
+import { runOrchestrator } from "../agent/orchestrator";
 import { logInboundMessage, logOutboundMessage } from "../services/audit-logs.service";
 import { prisma } from "../db/prisma";
 
@@ -96,25 +96,35 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       console.warn("Inbound audit log failed", message);
     }
 
-    const routed = await routeIncomingMessageWithConversationV2({
-      from: phone,
-      body,
-      messageSid
+    const user = await prisma.user.findFirst({
+      where: {
+        phone
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const state = await agentConversationStateStore.load(user.id);
+    const history = state?.recentTurns ?? [];
+
+    await agentConversationStateStore.appendTurn(user.id, {
+      role: "user",
+      content: body
+    });
+
+    const routed = await runOrchestrator({
+      userId: user.id,
+      userMessage: body,
+      history
     });
 
     if (!routed.reply.trim()) {
       return res.status(200).json({ status: "ok", suppressed: true });
-    }
-
-    if (routed.source === "v1") {
-      conversationMemory.appendTurn(phone, {
-        role: "user",
-        text: body
-      });
-      conversationMemory.appendTurn(phone, {
-        role: "assistant",
-        text: routed.reply
-      });
     }
 
     let outbound;
@@ -122,22 +132,17 @@ whatsappRouter.post("/webhook/whatsapp", async (req, res) => {
       outbound = await sendWhatsAppMessage({
         to: phone,
         body: routed.reply,
-        mediaUrl: routed.mediaUrl
+        mediaUrl: routed.attachment?.mediaUrl
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      const isMediaUrlError =
-        Boolean(routed.mediaUrl) && message.toLowerCase().includes("invalid media url");
-
-      if (!isMediaUrlError) {
-        throw error;
-      }
-
-      outbound = await sendWhatsAppMessage({
-        to: phone,
-        body: "I could not attach the PDF. Media URL is not publicly reachable. Please set BASE_URL to a public HTTPS domain."
-      });
+      throw new Error(`Failed to send WhatsApp reply: ${message}`);
     }
+
+    await agentConversationStateStore.appendTurn(user.id, {
+      role: "assistant",
+      content: routed.reply
+    });
 
     try {
       await logOutboundMessage({

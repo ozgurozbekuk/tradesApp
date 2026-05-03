@@ -44,6 +44,48 @@ export class CustomersService {
     return `${hasPlus ? "+" : ""}${digits}`;
   }
 
+  async createCustomer(input: {
+    userId: string;
+    name: string;
+    phone?: string;
+    notes?: string;
+  }) {
+    const name = input.name.trim();
+    const phone = input.phone?.trim() ? this.normalizePhone(input.phone) : null;
+    const notes = input.notes?.trim() || undefined;
+
+    if (!name) {
+      throw new Error("Customer name is required");
+    }
+
+    if (input.phone?.trim() && !phone) {
+      throw new Error("Invalid phone format");
+    }
+
+    if (phone) {
+      const duplicate = await prisma.customer.findFirst({
+        where: {
+          userId: input.userId,
+          phone
+        },
+        select: { id: true }
+      });
+
+      if (duplicate) {
+        throw new Error("Phone already belongs to another customer");
+      }
+    }
+
+    return prisma.customer.create({
+      data: {
+        userId: input.userId,
+        name,
+        phone,
+        notes
+      }
+    });
+  }
+
   async upsertByPhoneOrName(input: {
     userId: string;
     name: string;

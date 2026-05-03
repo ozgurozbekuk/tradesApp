@@ -9,7 +9,6 @@ import { exportRouter } from "./routes/export.route";
 import { healthRouter } from "./routes/health.route";
 import { stripeRouter } from "./routes/stripe.route";
 import { staticRouter } from "./routes/static.route";
-import { testRouter } from "./routes/test.route";
 import { whatsappRouter } from "./routes/whatsapp.route";
 
 export const createApp = () => {
@@ -45,7 +44,6 @@ export const createApp = () => {
   app.use(stripeRouter);
   app.use(exportRouter);
   app.use(whatsappRouter);
-  app.use(testRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
 
